@@ -26,11 +26,16 @@ namespace ROS2
         private Vector2 moveInput;
         private Vector2 rotateInput;
 
-        public ToggleVisualFeedback visualFeedback;
+        public ToggleIconFeedback iconFeedback;
+
 
         void Start()
         {
             ros2Unity = GetComponent<ROS2UnityComponent>();
+            if (iconFeedback != null)
+            {
+                iconFeedback.UpdateIcon(isActivated);
+            }
         }
 
         void Update()
@@ -87,7 +92,10 @@ namespace ROS2
         public void SetActivation()
         {
             isActivated = !isActivated;
-            visualFeedback.UpdateColor(isActivated);
+            if (iconFeedback != null)
+            {
+                iconFeedback.UpdateIcon(isActivated);
+            }
 
             // SEGURIDAD: Si desactivamos el control, enviamos un mensaje de "Parada" (0,0,0)
             // para evitar que el robot se quede moviendo con el último comando recibido.
