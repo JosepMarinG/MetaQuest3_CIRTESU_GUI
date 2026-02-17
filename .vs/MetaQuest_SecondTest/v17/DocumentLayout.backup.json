@@ -3,20 +3,40 @@
   "WorkspaceRootPath": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|c:\\users\\josep\\desktop\\unityprojects\\metaquest_secondtest\\assets\\scripts\\minimaptileexcluder.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\minimaptileexcluder.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|c:\\users\\josep\\desktop\\unityprojects\\metaquest_secondtest\\assets\\scripts\\minimapnavigationcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\minimapnavigationcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|c:\\users\\josep\\desktop\\unityprojects\\metaquest_secondtest\\assets\\scripts\\questteleopros2.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\questteleopros2.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\robottelemetrycontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\robottelemetrycontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\stereorobotuiviewer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\stereorobotuiviewer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\singlecameraviewer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\singlecameraviewer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\panelwindowmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\panelwindowmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\rostopicselector.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\rostopicselector.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\questpositioncontrol.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\questpositioncontrol.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\singlecameraviewer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\singlecameraviewer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\questteleopros2.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\questteleopros2.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\questvelocitycontrol.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -25,14 +45,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\toggleiconfeedback.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\toggleiconfeedback.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\rostopicselector.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\rostopicselector.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\assets\\scripts\\panelwindowmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{16A6FC98-7FA9-7E84-F5AA-5D6FD3F9DE04}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\panelwindowmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -47,12 +59,25 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
+              "Title": "MinimapTileExcluder.cs",
+              "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\MinimapTileExcluder.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\MinimapTileExcluder.cs",
+              "ToolTip": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\MinimapTileExcluder.cs",
+              "RelativeToolTip": "Assets\\Scripts\\MinimapTileExcluder.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAyAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-17T10:50:02.011Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
               "Title": "MinimapNavigationController.cs",
               "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\MinimapNavigationController.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\MinimapNavigationController.cs",
               "ToolTip": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\MinimapNavigationController.cs",
               "RelativeToolTip": "Assets\\Scripts\\MinimapNavigationController.cs",
-              "ViewState": "AgIAAEUAAAAAAAAAAAAYwFAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAD4AAAAAAAAAAAAAwGMAAAAkAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-02-14T16:12:06.816Z",
               "EditorCaption": ""
@@ -63,7 +88,31 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 3,
+              "Title": "StereoRobotUIViewer.cs",
+              "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\StereoRobotUIViewer.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\StereoRobotUIViewer.cs",
+              "ToolTip": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\StereoRobotUIViewer.cs",
+              "RelativeToolTip": "Assets\\Scripts\\StereoRobotUIViewer.cs",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAAABQAAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-16T19:04:34.824Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "RobotTelemetryController.cs",
+              "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\RobotTelemetryController.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\RobotTelemetryController.cs",
+              "ToolTip": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\RobotTelemetryController.cs",
+              "RelativeToolTip": "Assets\\Scripts\\RobotTelemetryController.cs",
+              "ViewState": "AgIAAEEAAAAAAAAAAAAgwE4AAABHAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-16T18:18:18.061Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
               "Title": "ToggleIconFeedback.cs",
               "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\ToggleIconFeedback.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\ToggleIconFeedback.cs",
@@ -75,7 +124,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 9,
               "Title": "QuestVelocityControl.cs",
               "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\QuestVelocityControl.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\QuestVelocityControl.cs",
@@ -87,40 +136,15 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 7,
               "Title": "QuestPositionControl.cs",
               "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\QuestPositionControl.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\QuestPositionControl.cs",
               "ToolTip": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\QuestPositionControl.cs",
               "RelativeToolTip": "Assets\\Scripts\\QuestPositionControl.cs",
-              "ViewState": "AgIAAAgAAAAAAAAAAAAAwBsAAAAEAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABsAAAAEAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-02-12T11:01:43.941Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "SingleCameraViewer.cs",
-              "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\SingleCameraViewer.cs",
-              "RelativeDocumentMoniker": "Assets\\Scripts\\SingleCameraViewer.cs",
-              "ToolTip": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\SingleCameraViewer.cs",
-              "RelativeToolTip": "Assets\\Scripts\\SingleCameraViewer.cs",
-              "ViewState": "AgIAACwAAAAAAAAAAAAgwDwAAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-02-08T21:41:20.963Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "QuestTeleopROS2.cs",
-              "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\QuestTeleopROS2.cs",
-              "RelativeDocumentMoniker": "Assets\\Scripts\\QuestTeleopROS2.cs",
-              "ToolTip": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\QuestTeleopROS2.cs",
-              "RelativeToolTip": "Assets\\Scripts\\QuestTeleopROS2.cs",
-              "ViewState": "AgIAAFEAAAAAAAAAAAAYwFsAAAAjAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-02-05T14:36:17.674Z",
-              "EditorCaption": ""
             },
             {
               "$type": "Document",
@@ -130,13 +154,37 @@
               "RelativeDocumentMoniker": "Assets\\Scripts\\ROSTopicSelector.cs",
               "ToolTip": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\ROSTopicSelector.cs",
               "RelativeToolTip": "Assets\\Scripts\\ROSTopicSelector.cs",
-              "ViewState": "AgIAAAUAAAAAAAAAAAAAwA0AAAAbAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAADIAAAAaAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-02-10T07:55:38.599Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 4,
+              "Title": "SingleCameraViewer.cs",
+              "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\SingleCameraViewer.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\SingleCameraViewer.cs",
+              "ToolTip": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\SingleCameraViewer.cs",
+              "RelativeToolTip": "Assets\\Scripts\\SingleCameraViewer.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAADwAAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-08T21:41:20.963Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "QuestTeleopROS2.cs",
+              "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\QuestTeleopROS2.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\QuestTeleopROS2.cs",
+              "ToolTip": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\QuestTeleopROS2.cs",
+              "RelativeToolTip": "Assets\\Scripts\\QuestTeleopROS2.cs",
+              "ViewState": "AgIAAFEAAAAAAAAAAAAYwFsAAAAjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-05T14:36:17.674Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
               "Title": "PanelWindowManager.cs",
               "DocumentMoniker": "C:\\Users\\Josep\\Desktop\\UnityProjects\\MetaQuest_SecondTest\\Assets\\Scripts\\PanelWindowManager.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\PanelWindowManager.cs",

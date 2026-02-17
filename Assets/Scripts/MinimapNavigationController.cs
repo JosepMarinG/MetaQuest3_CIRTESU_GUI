@@ -49,12 +49,41 @@ public class MinimapNavigationController : MonoBehaviour
     [Tooltip("Tiempo (s) de debounce antes de refrescar el overlay para evitar parpadeos mientras interactúas")]
     public float overlayRefreshDebounce = 0.08f;
 
+    [Tooltip("Umbral relativo de cambio de escala (p. ej. 0.02 = 2%) necesario para refrescar el overlay")]
+    public float overlayScaleChangeThreshold = 0.02f;
+
+    [Tooltip("Umbral (grados) de cambio en lat/lon para considerar que el origen geográfico cambió lo suficiente como para refrescar el overlay")]
+    public double overlayGeoMoveThresholdDegrees = 0.00005; // ~5-6 m
+
     // estado para refresco diferido
     private bool needsOverlayRefresh = false;
     private float lastOverlayChangeTime = 0f;
     private bool overlayRefreshInProgress = false;
 
+    // Estado usado para evitar refrescos cuando el georeference se mueve "muy poco"
+    private double lastOverlayGeoLat = double.NaN;
+    private double lastOverlayGeoLon = double.NaN;
+
     private bool isNavigating = false;
+
+    void Start()
+    {
+        // Inicializar último origen geográfico conocido (evita refrescos innecesarios)
+        if (georeference != null)
+        {
+            lastOverlayGeoLat = georeference.latitude;
+            lastOverlayGeoLon = georeference.longitude;
+        }
+
+        // En dispositivos móviles/Quest, aumentar el debounce por defecto para reducir toggles
+        #if UNITY_ANDROID || UNITY_IOS
+        if (Application.isMobilePlatform)
+        {
+            overlayRefreshDebounce = Mathf.Max(overlayRefreshDebounce, 0.35f);
+            if (debugLogs) Debug.Log($"[Minimap] Mobile platform detected — overlayRefreshDebounce={overlayRefreshDebounce}");
+        }
+        #endif
+    }
 
     void Update()
     {
@@ -100,7 +129,7 @@ public class MinimapNavigationController : MonoBehaviour
         }
 
         // Intentar refrescar overlay si está programado (debounce)
-        TryPerformOverlayRefresh();
+        //TryPerformOverlayRefresh();
     }
 
     void LateUpdate()
@@ -157,8 +186,11 @@ public class MinimapNavigationController : MonoBehaviour
         cesiumWorldTerrain.transform.position = newPos;
         cesiumWorldTerrain.transform.localScale = Vector3.one * nextScale;
 
-        if (debugLogs) Debug.Log($"[Minimap] Scale {currentScale:F6} -> {nextScale:F6}, focus {focusPoint}, posAdjusted {newPos}");
-        return true;
+        bool significantScaleChange = Mathf.Abs(nextScale - currentScale) / currentScale >= overlayScaleChangeThreshold;
+        if (debugLogs) Debug.Log($"[Minimap] Scale {currentScale:F6} -> {nextScale:F6} (significant={significantScaleChange}), focus {focusPoint}");
+
+        // Sólo solicitamos refresh del overlay si el cambio de escala es relevante
+        return significantScaleChange;
     }
 
     private Vector2 ReadThumbstick(UnityEngine.InputSystem.XR.XRController controller)
@@ -198,9 +230,22 @@ public class MinimapNavigationController : MonoBehaviour
         // Aplicamos el nuevo origen geográfico
         georeference.SetOriginLongitudeLatitudeHeight(lon, lat, georeference.height);
 
-        // El reposition del CartographicPolygon se realiza en LateUpdate para evitar que Cesium lo sobrescriba.
+        // Considerar sólo como "posChanged" si el origen se movió lo suficiente
+        bool significantGeoChange = double.IsNaN(lastOverlayGeoLat)
+            || System.Math.Abs(lat - lastOverlayGeoLat) >= overlayGeoMoveThresholdDegrees
+            || System.Math.Abs(lon - lastOverlayGeoLon) >= overlayGeoMoveThresholdDegrees;
 
-        return true;
+        if (significantGeoChange)
+        {
+            lastOverlayGeoLat = lat;
+            lastOverlayGeoLon = lon;
+            if (debugLogs) Debug.Log($"[Minimap] Georeference moved (lat:{lat:F6}, lon:{lon:F6}) — scheduling overlay refresh.");
+            return true;
+        }
+
+        if (debugLogs) Debug.Log("[Minimap] Georeference moved, but below threshold — no overlay refresh.");
+        // El reposition del CartographicPolygon se realiza en LateUpdate para evitar que Cesium lo sobrescriba.
+        return false;
     }
 
     // Devuelve el punto en el mundo donde estás "mirando" para usar como foco al hacer zoom
@@ -236,8 +281,21 @@ public class MinimapNavigationController : MonoBehaviour
 
     private void RefreshOverlay()
     {
+        // Only refresh if overlay exists and is actually used for excluding tiles
         if (rasterOverlay == null) return;
         if (overlayRefreshInProgress) return;
+        if (!rasterOverlay.excludeSelectedTiles)
+        {
+            if (debugLogs) Debug.Log("[Minimap] rasterOverlay.excludeSelectedTiles == false — skipping overlay refresh.");
+            needsOverlayRefresh = false;
+            return;
+        }
+        if (rasterOverlay.polygons == null || rasterOverlay.polygons.Count == 0)
+        {
+            if (debugLogs) Debug.Log("[Minimap] rasterOverlay.polygons empty — skipping overlay refresh.");
+            needsOverlayRefresh = false;
+            return;
+        }
 
         overlayRefreshInProgress = true;
 
@@ -253,6 +311,23 @@ public class MinimapNavigationController : MonoBehaviour
 
     private void ScheduleOverlayRefresh()
     {
+        // Don't even schedule if overlay is not configured to exclude tiles or has no polygons
+        if (rasterOverlay == null)
+        {
+            if (debugLogs) Debug.Log("[Minimap] No rasterOverlay assigned — skipping schedule.");
+            return;
+        }
+        if (!rasterOverlay.excludeSelectedTiles)
+        {
+            if (debugLogs) Debug.Log("[Minimap] excludeSelectedTiles disabled — skipping schedule.");
+            return;
+        }
+        if (rasterOverlay.polygons == null || rasterOverlay.polygons.Count == 0)
+        {
+            if (debugLogs) Debug.Log("[Minimap] rasterOverlay.polygons empty — skipping schedule.");
+            return;
+        }
+
         needsOverlayRefresh = true;
         lastOverlayChangeTime = Time.time;
         if (debugLogs) Debug.Log("[Minimap] Overlay refresh programado");
@@ -261,6 +336,11 @@ public class MinimapNavigationController : MonoBehaviour
     private void TryPerformOverlayRefresh()
     {
         if (!needsOverlayRefresh || overlayRefreshInProgress || rasterOverlay == null) return;
+
+        // double-check that overlay is meaningful to refresh
+        if (!rasterOverlay.excludeSelectedTiles) { needsOverlayRefresh = false; return; }
+        if (rasterOverlay.polygons == null || rasterOverlay.polygons.Count == 0) { needsOverlayRefresh = false; return; }
+
         if (Time.time - lastOverlayChangeTime < overlayRefreshDebounce) return;
         RefreshOverlay();
     }
@@ -269,6 +349,19 @@ public class MinimapNavigationController : MonoBehaviour
     {
         // Bypass debounce and refresh right away (usa con moderación)
         if (rasterOverlay == null) return;
+        if (!rasterOverlay.excludeSelectedTiles)
+        {
+            if (debugLogs) Debug.Log("[Minimap] excludeSelectedTiles disabled — skipping immediate overlay refresh.");
+            needsOverlayRefresh = false;
+            return;
+        }
+        if (rasterOverlay.polygons == null || rasterOverlay.polygons.Count == 0)
+        {
+            if (debugLogs) Debug.Log("[Minimap] rasterOverlay.polygons empty — skipping immediate overlay refresh.");
+            needsOverlayRefresh = false;
+            return;
+        }
+
         if (debugLogs) Debug.Log("[Minimap] Overlay refresh inmediato");
         rasterOverlay.enabled = false;
         rasterOverlay.enabled = true;
