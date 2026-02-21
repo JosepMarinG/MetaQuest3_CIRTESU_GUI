@@ -5,6 +5,7 @@ public class PanelWindowManager : MonoBehaviour
     [Header("Prefabs de los Paneles")]
     public GameObject monoPanelPrefab;
     public GameObject stereoPanelPrefab;
+    public GameObject mapa3d;
 
     [Header("Punto de Aparición")]
     public Transform spawnPoint; // Ponlo a 1 metro delante de la cámara (OVRCameraRig)
@@ -17,6 +18,10 @@ public class PanelWindowManager : MonoBehaviour
     public void SpawnStereoPanel()
     {
         InstantiatePanel(stereoPanelPrefab);
+    }
+    public void SpawnMapa3d()
+    {
+        InstantiatePanel(mapa3d);
     }
 
     private void InstantiatePanel(GameObject prefab)
