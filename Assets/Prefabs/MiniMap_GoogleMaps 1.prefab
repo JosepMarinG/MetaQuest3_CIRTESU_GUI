@@ -134,7 +134,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "/mavlink/gps\u200B"
+  m_text: "/catamaran/mavlink/gps\u200B"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -3113,7 +3113,7 @@ MonoBehaviour:
   m_BlockingObjects: 0
   m_BlockingMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 4294967167
 --- !u!222 &43130022264905852
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -5634,7 +5634,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gpsTopicInput: {fileID: 4899311264393218898}
-  defaultOrientationTopic: /mavlink/orientation
+  defaultOrientationTopic: /catamaran/mavlink/orientation
   globeAnchor: {fileID: 4723007410568100118}
   mapController: {fileID: 3937917006350729036}
   isFollowActive: 0
@@ -6332,7 +6332,7 @@ MonoBehaviour:
   m_CaretColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
   m_CustomCaretColor: 0
   m_SelectionColor: {r: 0.65882355, g: 0.80784315, b: 1, a: 0.7529412}
-  m_Text: /mavlink/gps
+  m_Text: /catamaran/mavlink/gps
   m_CaretBlinkRate: 0.85
   m_CaretWidth: 1
   m_ReadOnly: 0
@@ -6994,7 +6994,7 @@ GameObject:
   - component: {fileID: 14448713501178119}
   - component: {fileID: 4013554341736551980}
   - component: {fileID: 2589278947585837248}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: Google Photorealistic 3D Tiles
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7028,7 +7028,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 844ac86b07dcfa3468f56da55d787510, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _showCreditsOnScreen: 0
+  _showCreditsOnScreen: 1
   _tilesetSource: 0
   _url: 
   _ionAssetID: 2275207
