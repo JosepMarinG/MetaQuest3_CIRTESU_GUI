@@ -15,13 +15,18 @@ namespace ROS2
         [Header("Estado de Control")]
         public bool isActivated = true; // Controlado por el Toggle del Panel
 
-        [Header("Configuración de ROS 2")]
+        [Header("Configuraciï¿½n de ROS 2")]
         public string topicName = "/cmd_vel";
         public TMP_InputField inputField;
 
         [Header("Sensibilidad")]
         public float velocityLinear = 0.5f;
         public float velocityAngular = 1.0f;
+
+        [Header("Frecuencia de publicaciÃ³n")]
+        public float publishRate = 10f; // Mensajes por segundo
+        private float publishInterval;
+        private float timeSinceLastPublish = 0f;
 
         private Vector2 moveInput;
         private Vector2 rotateInput;
@@ -32,6 +37,7 @@ namespace ROS2
         void Start()
         {
             ros2Unity = GetComponent<ROS2UnityComponent>();
+            publishInterval = 1f / publishRate; // Calcular intervalo desde la frecuencia
             if (iconFeedback != null)
             {
                 iconFeedback.UpdateIcon(isActivated);
@@ -40,10 +46,10 @@ namespace ROS2
 
         void Update()
         {
-            // 1. Si no está activado, no leemos mandos ni publicamos nada
+            // 1. Si no estï¿½ activado, no leemos mandos ni publicamos nada
             //if (!isActivated) return;
 
-            // 2. Leer los joysticks físicos
+            // 2. Leer los joysticks fï¿½sicos
             var leftHand = UnityEngine.InputSystem.XR.XRController.leftHand;
             var rightHand = UnityEngine.InputSystem.XR.XRController.rightHand;
 
@@ -59,7 +65,7 @@ namespace ROS2
                 if (thumb != null) rotateInput = thumb.ReadValue();
             }
 
-            // 3. Inicializar el nodo una sola vez si ROS está listo
+            // 3. Inicializar el nodo una sola vez si ROS estï¿½ listo
             if (ros2Node == null && ros2Unity.Ok())
             {
                 ros2Node = ros2Unity.CreateNode("QuestTeleopNode");
@@ -69,8 +75,11 @@ namespace ROS2
                 Debug.Log($"[Teleop] Nodo creado. Publicando en: {finalTopic}");
             }
 
-            // 4. Publicar comandos de movimiento
-            if (cmd_vel_publisher != null && isActivated == true)
+            // 4. Control de frecuencia de publicaciï¿½n
+            timeSinceLastPublish += Time.deltaTime;
+
+            // 5. Publicar comandos de movimiento solo si ha pasado el intervalo requerido
+            if (cmd_vel_publisher != null && isActivated == true && timeSinceLastPublish >= publishInterval)
             {
                 geometry_msgs.msg.Twist msg = new geometry_msgs.msg.Twist
                 {
@@ -85,10 +94,11 @@ namespace ROS2
                     }
                 };
                 cmd_vel_publisher.Publish(msg);
+                timeSinceLastPublish = 0f; // Reiniciar contador
             }
         }
 
-        // Método público para conectar con el Toggle de la UI
+        // Mï¿½todo pï¿½blico para conectar con el Toggle de la UI
         public void SetActivation()
         {
             isActivated = !isActivated;
@@ -98,7 +108,7 @@ namespace ROS2
             }
 
             // SEGURIDAD: Si desactivamos el control, enviamos un mensaje de "Parada" (0,0,0)
-            // para evitar que el robot se quede moviendo con el último comando recibido.
+            // para evitar que el robot se quede moviendo con el ï¿½ltimo comando recibido.
             if (!isActivated && cmd_vel_publisher != null)
             {
                 geometry_msgs.msg.Twist stopMsg = new geometry_msgs.msg.Twist();

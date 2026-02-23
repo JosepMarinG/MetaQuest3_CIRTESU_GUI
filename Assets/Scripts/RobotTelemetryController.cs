@@ -12,12 +12,14 @@ public class RobotTelemetryController : MonoBehaviour
     [Header("Configuración")]
     public string gpsTopic = "/catamaran/mavlink/gps";
     public CesiumGlobeAnchor globeAnchor;
+    public float updateRate = 6f; // Hz
     
     private double lat = 39.96837693;
     private double lon = 0.01961313;
     private double alt = 48.5374;
     private bool newDataReceived = false;
     private int messageCount = 0;
+    private float updateTimer = 0f;
 
     void Start()
     {
@@ -56,15 +58,22 @@ public class RobotTelemetryController : MonoBehaviour
 
     private void Update()
     {
-        if (newDataReceived && globeAnchor != null)
+        updateTimer += Time.deltaTime;
+        
+        // Solo actualizar a la frecuencia especificada (6 Hz por defecto)
+        if (updateTimer >= 1f / updateRate)
         {
-            double3 newPosition = new double3(lon, lat, alt);
-            globeAnchor.longitudeLatitudeHeight = newPosition;
-            
-            Debug.Log($"[Update] GlobeAnchor actualizado → Lon:{lon:F6}, Lat:{lat:F6}, Alt:{alt:F1}");
-            Debug.Log($"[Update] Valor en GlobeAnchor: {globeAnchor.longitudeLatitudeHeight}");
-            
-            newDataReceived = false;
+            if (newDataReceived && globeAnchor != null)
+            {
+                double3 newPosition = new double3(lon, lat, alt);
+                globeAnchor.longitudeLatitudeHeight = newPosition;
+                
+                Debug.Log($"[Update] GlobeAnchor actualizado → Lon:{lon:F6}, Lat:{lat:F6}, Alt:{alt:F1}");
+                Debug.Log($"[Update] Valor en GlobeAnchor: {globeAnchor.longitudeLatitudeHeight}");
+                
+                newDataReceived = false;
+            }
+            updateTimer = 0f;
         }
     }
 }

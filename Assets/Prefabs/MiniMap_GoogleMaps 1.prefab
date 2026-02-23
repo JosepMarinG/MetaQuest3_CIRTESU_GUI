@@ -441,9 +441,9 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 7798392100942273791}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 22, y: -12}
   m_SizeDelta: {x: 24, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1076683624324990298
@@ -1565,10 +1565,10 @@ RectTransform:
   - {fileID: 6892762375706786394}
   m_Father: {fileID: 1358823043783331990}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 28, y: 0}
+  m_SizeDelta: {x: 56, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &4066478679580977012
 MonoBehaviour:
@@ -1799,10 +1799,10 @@ RectTransform:
   - {fileID: 2642313978787099392}
   m_Father: {fileID: 6655062231094858273}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 40}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 16, y: -10}
+  m_SizeDelta: {x: 56, y: 40}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &4531643505339848642
 MonoBehaviour:
@@ -2549,10 +2549,10 @@ RectTransform:
   - {fileID: 5279535824793139811}
   m_Father: {fileID: 2642313978787099392}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 28, y: 0}
+  m_SizeDelta: {x: 56, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &4952640007054938669
 MonoBehaviour:
@@ -2720,10 +2720,10 @@ RectTransform:
   - {fileID: 6655062231094858273}
   m_Father: {fileID: 3594141570545320086}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 246.91624, y: -24}
+  m_SizeDelta: {x: 465.8325, y: 20}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2863828346389089456
 MonoBehaviour:
@@ -3445,10 +3445,10 @@ RectTransform:
   - {fileID: 1358823043783331990}
   m_Father: {fileID: 6655062231094858273}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 40}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 449.8325, y: -10}
+  m_SizeDelta: {x: 56, y: 40}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &4245040088931188456
 MonoBehaviour:
@@ -3786,7 +3786,7 @@ MonoBehaviour:
   onValueChanged:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 7471821312640149817}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: RobotTelemetryController, Assembly-CSharp
         m_MethodName: ClosePanel
         m_Mode: 1
@@ -5364,15 +5364,15 @@ GameObject:
   - component: {fileID: 3937917006350729036}
   - component: {fileID: 5346602839734122562}
   - component: {fileID: 974440778795965722}
-  - component: {fileID: 7471821312640149817}
   - component: {fileID: 6879536516472517115}
+  - component: {fileID: 9014580339799990098}
   m_Layer: 0
   m_Name: MiniMap_GoogleMaps 1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2728477543584570767
 Transform:
   m_ObjectHideFlags: 0
@@ -5621,27 +5621,6 @@ MonoBehaviour:
         Min: 1
         Max: 1
   _resetScaleResponsivenessOnConstraintOvershoot: 0
---- !u!114 &7471821312640149817
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5035124472931973361}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 90ddcd355e6a43742ac1c795e5a8584a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  gpsTopicInput: {fileID: 4899311264393218898}
-  defaultOrientationTopic: /catamaran/mavlink/orientation
-  globeAnchor: {fileID: 4723007410568100118}
-  mapController: {fileID: 3937917006350729036}
-  isFollowActive: 0
-  clippingPolygon: {fileID: 5083922678951143907}
-  robotModel: {fileID: 3769800740850819791}
-  margin: 0.05
-  rootPanel: {fileID: 5035124472931973361}
 --- !u!114 &6879536516472517115
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5654,6 +5633,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: feab04ad06492965492b3edc6423aa53, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &9014580339799990098
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5035124472931973361}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 90ddcd355e6a43742ac1c795e5a8584a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  gpsTopic: /catamaran/mavlink/gps
+  globeAnchor: {fileID: 4723007410568100118}
 --- !u!1 &5116106044321901106
 GameObject:
   m_ObjectHideFlags: 0
@@ -6203,10 +6196,10 @@ RectTransform:
   - {fileID: 3436104433322229786}
   m_Father: {fileID: 6655062231094858273}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 30}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 232.91624, y: -10}
+  m_SizeDelta: {x: 377.8325, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &3241444843803084982
 CanvasRenderer:
@@ -6402,10 +6395,10 @@ RectTransform:
   - {fileID: 7798392100942273791}
   m_Father: {fileID: 4416326727964669421}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 40}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 28, y: -20}
+  m_SizeDelta: {x: 56, y: 40}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1349904470467119588
 CanvasRenderer:
@@ -8224,10 +8217,10 @@ RectTransform:
   - {fileID: 8424968722423351899}
   m_Father: {fileID: 2010035408569652196}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 40}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 28, y: -20}
+  m_SizeDelta: {x: 56, y: 40}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &9063760576434958125
 CanvasRenderer:
@@ -8590,7 +8583,7 @@ MonoBehaviour:
   onValueChanged:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 7471821312640149817}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: RobotTelemetryController, Assembly-CSharp
         m_MethodName: ToggleFollowRobot
         m_Mode: 1
@@ -8792,9 +8785,9 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 8424968722423351899}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 22, y: -12}
   m_SizeDelta: {x: 24, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &4280547351536886266

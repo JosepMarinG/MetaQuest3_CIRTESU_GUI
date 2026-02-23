@@ -13,9 +13,10 @@ public class QuestPositionControl : MonoBehaviour
     [Header("Estado de Control")]
     public bool isActivated = false;
 
-    [Header("Configuración ROS 2")]
+    [Header("Configuraciï¿½n ROS 2")]
     public string topicName = "/robot/cmd_pose";
     public string frameId = "base_link";
+    public float publishRate = 10f; // Hz - Limitar a 10 publicaciones por segundo
 
     [Header("Referencias Visuales")]
     public GameObject originVisualPrefab;
@@ -24,6 +25,7 @@ public class QuestPositionControl : MonoBehaviour
     private bool isControlling = false;
     private UnityEngine.Vector3 anchorPosition;
     private UnityEngine.Quaternion anchorRotation;
+    private float publishTimer = 0f;
 
     public ToggleIconFeedback iconFeedback;
 
@@ -44,7 +46,7 @@ public class QuestPositionControl : MonoBehaviour
 
     void Update()
     {
-        // 1. Bloqueo de seguridad: si no está activado, no hacemos nada
+        // 1. Bloqueo de seguridad: si no estï¿½ activado, no hacemos nada
         if (!isActivated) return;
 
         if (ros2Node == null && ros2Unity.Ok())
@@ -61,7 +63,19 @@ public class QuestPositionControl : MonoBehaviour
         if (gripAction != null)
         {
             if (gripAction.wasPressedThisFrame) StartPositionControl(rightHand);
-            if (gripAction.isPressed && isControlling) PublishRelativeTransform(rightHand);
+            
+            if (gripAction.isPressed && isControlling)
+            {
+                publishTimer += UnityEngine.Time.deltaTime;
+                
+                // Solo publicar a la frecuencia especificada (10 Hz por defecto)
+                if (publishTimer >= 1f / publishRate)
+                {
+                    PublishRelativeTransform(rightHand);
+                    publishTimer = 0f;
+                }
+            }
+            
             if (gripAction.wasReleasedThisFrame) StopPositionControl();
         }
     }
@@ -87,6 +101,7 @@ public class QuestPositionControl : MonoBehaviour
     private void StartPositionControl(UnityEngine.InputSystem.XR.XRController hand)
     {
         isControlling = true;
+        publishTimer = 0f; // Resetear timer para publicar inmediatamente
         anchorPosition = hand.devicePosition.ReadValue();
         anchorRotation = hand.deviceRotation.ReadValue();
 

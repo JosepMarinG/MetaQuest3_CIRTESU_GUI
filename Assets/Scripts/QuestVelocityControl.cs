@@ -13,17 +13,19 @@ public class QuestVelocityControl : MonoBehaviour
     [Header("Estado de Control")]
     public bool isActivated = false;
 
-    [Header("Configuración")]
+    [Header("Configuraciï¿½n")]
     public string topicName = "/cmd_vel";
     public string frameId = "base_link";
     public float maxSpeed = 1.0f;
     public float deadZone = 0.02f;
+    public float publishRate = 10f; // Hz - Limitar a 10 publicaciones por segundo
 
     [Header("Referencias Visuales")]
     public GameObject originVisualPrefab;
     private GameObject activeVisual;
     private UnityEngine.Vector3 anchorPosition;
     private bool isControlling = false;
+    private float publishTimer = 0f;
 
     public ToggleIconFeedback iconFeedback;
 
@@ -61,7 +63,19 @@ public class QuestVelocityControl : MonoBehaviour
         if (gripAction != null)
         {
             if (gripAction.wasPressedThisFrame) StartVelocityControl(rightHand);
-            if (gripAction.isPressed && isControlling) PublishVelocity(rightHand);
+            
+            if (gripAction.isPressed && isControlling)
+            {
+                publishTimer += UnityEngine.Time.deltaTime;
+                
+                // Solo publicar a la frecuencia especificada (10 Hz por defecto)
+                if (publishTimer >= 1f / publishRate)
+                {
+                    PublishVelocity(rightHand);
+                    publishTimer = 0f;
+                }
+            }
+            
             if (gripAction.wasReleasedThisFrame) StopVelocityControl();
         }
     }
@@ -89,6 +103,7 @@ public class QuestVelocityControl : MonoBehaviour
     private void StartVelocityControl(UnityEngine.InputSystem.XR.XRController hand)
     {
         isControlling = true;
+        publishTimer = 0f; // Resetear timer para publicar inmediatamente
         anchorPosition = hand.devicePosition.ReadValue();
         OVRInput.SetControllerVibration(1f, 0.5f, OVRInput.Controller.RTouch);
         Invoke("StopVibration", 0.1f);

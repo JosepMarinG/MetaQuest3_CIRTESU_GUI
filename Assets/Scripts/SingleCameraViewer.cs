@@ -12,12 +12,17 @@ public class SingleCameraViewer : MonoBehaviour
     [Header("Configuraci�n")]
     public string cameraTopic = "/camera/left/compressed";
     public RawImage displayImage;
+    public float displayRate = 5f; // Hz - Limitar a 5 FPS para ahorrar memoria
 
     // Buffer management
     private byte[] currentFrameData;
-    private byte[] nextFrameData;
     private object bufferLock = new object();
     private bool newFrameAvailable = false;
+    private float displayTimer = 0f;
+    private int framesReceived = 0;
+    private int framesDisplayed = 0;
+    private int gcCounter = 0;
+    private const int GC_CALL_INTERVAL = 100; // Llamar GC cada 100 frames recibidos
     
     private Texture2D texture;
     private ISubscription<CompressedImage> subImage;
@@ -38,17 +43,28 @@ public class SingleCameraViewer : MonoBehaviour
             SubscribeToTopic();
         }
 
-        // Thread-safe frame update
-        if (newFrameAvailable && displayImage != null)
+        displayTimer += Time.deltaTime;
+        
+        // Solo actualizar la textura a la frecuencia especificada (5 Hz por defecto)
+        if (displayTimer >= 1f / displayRate && newFrameAvailable && displayImage != null)
         {
             lock (bufferLock)
             {
-                if (currentFrameData != null && texture.LoadImage(currentFrameData))
+                if (currentFrameData != null && currentFrameData.Length > 0)
                 {
-                    displayImage.texture = texture;
+                    // Reutilizar la textura existente para evitar crear objetos nuevos
+                    if (texture.LoadImage(currentFrameData))
+                    {
+                        displayImage.texture = texture;
+                        framesDisplayed++;
+                    }
+                    
+                    // Liberar referencia al buffer para permitir GC
+                    currentFrameData = null;
                 }
                 newFrameAvailable = false;
             }
+            displayTimer = 0f;
         }
     }
 
@@ -56,11 +72,26 @@ public class SingleCameraViewer : MonoBehaviour
     {
         subImage = ros2Node.CreateSubscription<CompressedImage>(
             cameraTopic, msg => {
-                // Thread-safe buffer update
+                framesReceived++;
+                
+                // Descartar frame si aún hay uno pendiente de mostrar (throttling)
                 lock (bufferLock)
                 {
-                    currentFrameData = msg.Data;
-                    newFrameAvailable = true;
+                    if (!newFrameAvailable)
+                    {
+                        currentFrameData = msg.Data;
+                        newFrameAvailable = true;
+                    }
+                    // Si newFrameAvailable es true, descartamos este frame
+                }
+                
+                // Llamar al GC periódicamente para limpiar memoria
+                gcCounter++;
+                if (gcCounter >= GC_CALL_INTERVAL)
+                {
+                    System.GC.Collect();
+                    gcCounter = 0;
+                    Debug.Log($"[Camera] GC llamado. Frames: Recibidos={framesReceived}, Mostrados={framesDisplayed}");
                 }
             });
     }
@@ -83,6 +114,20 @@ public class SingleCameraViewer : MonoBehaviour
         if (ros2Node != null && ros2Unity != null)
         {
             ros2Unity.RemoveNode(ros2Node);
+        }        
+        // Limpiar recursos de textura
+        if (texture != null)
+        {
+            Destroy(texture);
+            texture = null;
         }
-    }
+        
+        // Limpiar buffers
+        lock (bufferLock)
+        {
+            currentFrameData = null;
+        }
+        
+        // Forzar limpieza de memoria al destruir
+        System.GC.Collect();    }
 }
