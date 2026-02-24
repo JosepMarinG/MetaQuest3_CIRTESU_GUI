@@ -58,9 +58,7 @@ public class SingleCameraViewer : MonoBehaviour
                         displayImage.texture = texture;
                         framesDisplayed++;
                     }
-                    
-                    // Liberar referencia al buffer para permitir GC
-                    currentFrameData = null;
+                    // No ponemos a null aquí - será sobrescrito por el siguiente frame
                 }
                 newFrameAvailable = false;
             }
@@ -74,15 +72,11 @@ public class SingleCameraViewer : MonoBehaviour
             cameraTopic, msg => {
                 framesReceived++;
                 
-                // Descartar frame si aún hay uno pendiente de mostrar (throttling)
+                // Siempre guardar el frame más reciente, descartando el anterior si no se ha mostrado
                 lock (bufferLock)
                 {
-                    if (!newFrameAvailable)
-                    {
-                        currentFrameData = msg.Data;
-                        newFrameAvailable = true;
-                    }
-                    // Si newFrameAvailable es true, descartamos este frame
+                    currentFrameData = msg.Data;
+                    newFrameAvailable = true;
                 }
                 
                 // Llamar al GC periódicamente para limpiar memoria
@@ -108,26 +102,37 @@ public class SingleCameraViewer : MonoBehaviour
         Debug.Log("[ROS2] Suscrito a nuevo topic: " + newTopic);
     }
 
-    // El cierre de la suscripci�n se hace autom�ticamente aqu� al destruir el panel
+    // El cierre de la suscripción se hace automáticamente aquí al destruir el panel
     private void OnDestroy()
     {
+        // 1. Primero desuscribir para evitar nuevos mensajes
+        if (subImage != null && ros2Node != null)
+        {
+            ros2Node.RemoveSubscription<CompressedImage>(subImage);
+            subImage = null;
+        }
+        
+        // 2. Remover nodo ROS2
         if (ros2Node != null && ros2Unity != null)
         {
             ros2Unity.RemoveNode(ros2Node);
-        }        
-        // Limpiar recursos de textura
+            ros2Node = null;
+        }
+        
+        // 3. Limpiar buffers (ahora que no llegarán más mensajes)
+        lock (bufferLock)
+        {
+            currentFrameData = null;
+        }
+        
+        // 4. Limpiar recursos de textura
         if (texture != null)
         {
             Destroy(texture);
             texture = null;
         }
         
-        // Limpiar buffers
-        lock (bufferLock)
-        {
-            currentFrameData = null;
-        }
-        
-        // Forzar limpieza de memoria al destruir
-        System.GC.Collect();    }
+        // 5. Forzar limpieza de memoria al destruir
+        System.GC.Collect();
+    }
 }
