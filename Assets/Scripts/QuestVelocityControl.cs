@@ -9,12 +9,13 @@ public class QuestVelocityControl : MonoBehaviour
     private ROS2UnityComponent ros2Unity;
     private ROS2Node ros2Node;
     private IPublisher<geometry_msgs.msg.TwistStamped> twistPublisher;
+    private bool rosInitLogged;
 
     [Header("Estado de Control")]
     public bool isActivated = false;
 
     [Header("Configuraci�n")]
-    public string topicName = "/cmd_vel";
+    public string topicName = "/tp_controller/tasks/bravo_ee_configuration_feedforward/feedforward";
     public string frameId = "base_link";
     public float maxSpeed = 1.0f;
     public float deadZone = 0.02f;
@@ -32,6 +33,13 @@ public class QuestVelocityControl : MonoBehaviour
     void Start()
     {
         ros2Unity = Object.FindAnyObjectByType<ROS2UnityComponent>();
+        topicName = topicName.Trim();
+
+        if (ros2Unity == null)
+        {
+            Debug.LogError("[QuestVelocityControl] No se encontró ROS2UnityComponent en la escena.");
+        }
+
         if (originVisualPrefab != null)
         {
             activeVisual = Instantiate(originVisualPrefab);
@@ -46,14 +54,10 @@ public class QuestVelocityControl : MonoBehaviour
 
     void Update()
     {
+        EnsureRosPublisherInitialized();
+
         // Bloqueo de seguridad
         if (!isActivated) return;
-
-        if (ros2Node == null && ros2Unity.Ok())
-        {
-            ros2Node = ros2Unity.CreateNode("QuestVelocityNode");
-            twistPublisher = ros2Node.CreatePublisher<geometry_msgs.msg.TwistStamped>(topicName);
-        }
 
         var rightHand = UnityEngine.InputSystem.XR.XRController.rightHand;
         if (rightHand == null) return;
@@ -69,7 +73,7 @@ public class QuestVelocityControl : MonoBehaviour
                 publishTimer += UnityEngine.Time.deltaTime;
                 
                 // Solo publicar a la frecuencia especificada (10 Hz por defecto)
-                if (publishTimer >= 1f / publishRate)
+                if (publishRate <= 0f || publishTimer >= 1f / publishRate)
                 {
                     PublishVelocity(rightHand);
                     publishTimer = 0f;
@@ -148,6 +152,23 @@ public class QuestVelocityControl : MonoBehaviour
     }
 
     private void StopVibration() => OVRInput.SetControllerVibration(0, 0, OVRInput.Controller.RTouch);
+
+    private void EnsureRosPublisherInitialized()
+    {
+        if (twistPublisher != null || ros2Unity == null) return;
+        if (!ros2Unity.Ok()) return;
+
+        topicName = topicName.Trim();
+
+        ros2Node = ros2Unity.CreateNode("QuestVelocityNode");
+        twistPublisher = ros2Node.CreatePublisher<geometry_msgs.msg.TwistStamped>(topicName);
+
+        if (!rosInitLogged)
+        {
+            Debug.Log($"[QuestVelocityControl] Publisher creado en topic: '{topicName}'");
+            rosInitLogged = true;
+        }
+    }
 
     private builtin_interfaces.msg.Time GetRosTimeManual()
     {
