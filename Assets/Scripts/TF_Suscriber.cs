@@ -27,6 +27,8 @@ public class TF_Suscriber : MonoBehaviour
     private ROS2Node ros2Node;
     private ISubscription<TFMessage> tfSubscription;
     private ISubscription<TFMessage> tfStaticSubscription;
+    private bool warnedMissingRos2Unity;
+    private bool warnedRos2NotReady;
 
     private readonly object tfLock = new object();
     private readonly Dictionary<string, TFData> transformsByLink = new Dictionary<string, TFData>();
@@ -100,28 +102,45 @@ public class TF_Suscriber : MonoBehaviour
             ros2Unity = UnityEngine.Object.FindAnyObjectByType<ROS2UnityComponent>();
             if (ros2Unity == null)
             {
+                if (!warnedMissingRos2Unity)
+                {
+                    Debug.LogWarning("[TF_Suscriber] No se encontro ROS2UnityComponent en la escena.");
+                    warnedMissingRos2Unity = true;
+                }
                 return;
             }
+
+            warnedMissingRos2Unity = false;
         }
 
         if (!ros2Unity.Ok())
         {
+            if (!warnedRos2NotReady)
+            {
+                Debug.LogWarning("[TF_Suscriber] ROS2UnityComponent existe, pero ROS2 aun no esta listo (Ok() == false).");
+                warnedRos2NotReady = true;
+            }
             return;
         }
+
+        warnedRos2NotReady = false;
 
         string resolvedNodeName = $"{nodeName}_{gameObject.name.Replace(" ", "_")}_{Mathf.Abs(GetInstanceID())}";
         ros2Node = ros2Unity.CreateNode(resolvedNodeName);
 
         if (ros2Node == null)
         {
+            Debug.LogError($"[TF_Suscriber] No se pudo crear el nodo ROS2 '{resolvedNodeName}'.");
             return;
         }
 
-        tfSubscription = ros2Node.CreateSubscription<TFMessage>(tfTopic, OnTfMessageReceived);
+        QualityOfServiceProfile tfQos = new QualityOfServiceProfile(QosPresetProfile.SENSOR_DATA);
+        tfSubscription = ros2Node.CreateSubscription<TFMessage>(tfTopic, OnTfMessageReceived, tfQos);
 
         if (!string.IsNullOrWhiteSpace(tfStaticTopic))
         {
-            tfStaticSubscription = ros2Node.CreateSubscription<TFMessage>(tfStaticTopic, OnTfMessageReceived);
+            QualityOfServiceProfile tfStaticQos = new QualityOfServiceProfile(QosPresetProfile.DEFAULT);
+            tfStaticSubscription = ros2Node.CreateSubscription<TFMessage>(tfStaticTopic, OnTfMessageReceived, tfStaticQos);
         }
 
         Debug.Log($"[TF_Suscriber] Suscrito a {tfTopic} y {tfStaticTopic} con nodo {resolvedNodeName}");
