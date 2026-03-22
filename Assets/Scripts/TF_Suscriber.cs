@@ -29,6 +29,7 @@ public class TF_Suscriber : MonoBehaviour
     private ISubscription<TFMessage> tfStaticSubscription;
     private bool warnedMissingRos2Unity;
     private bool warnedRos2NotReady;
+    private bool warnedInitException;
 
     private readonly object tfLock = new object();
     private readonly Dictionary<string, TFData> transformsByLink = new Dictionary<string, TFData>();
@@ -125,25 +126,49 @@ public class TF_Suscriber : MonoBehaviour
 
         warnedRos2NotReady = false;
 
-        string resolvedNodeName = $"{nodeName}_{gameObject.name.Replace(" ", "_")}_{Mathf.Abs(GetInstanceID())}";
-        ros2Node = ros2Unity.CreateNode(resolvedNodeName);
-
-        if (ros2Node == null)
+        string normalizedTfTopic = NormalizeTopicName(tfTopic);
+        if (string.IsNullOrEmpty(normalizedTfTopic))
         {
-            Debug.LogError($"[TF_Suscriber] No se pudo crear el nodo ROS2 '{resolvedNodeName}'.");
-            return;
+            normalizedTfTopic = "/tf";
+            Debug.LogWarning("[TF_Suscriber] El topic TF principal estaba vacio. Se usara '/tf'.");
         }
 
-        QualityOfServiceProfile tfQos = new QualityOfServiceProfile(QosPresetProfile.SENSOR_DATA);
-        tfSubscription = ros2Node.CreateSubscription<TFMessage>(tfTopic, OnTfMessageReceived, tfQos);
+        string normalizedTfStaticTopic = NormalizeTopicName(tfStaticTopic);
+        string gameObjectName = gameObject != null ? gameObject.name : "GameObject";
+        string resolvedNodeName = BuildResolvedNodeName(nodeName, gameObjectName, GetInstanceID());
 
-        if (!string.IsNullOrWhiteSpace(tfStaticTopic))
+        try
         {
-            QualityOfServiceProfile tfStaticQos = new QualityOfServiceProfile(QosPresetProfile.DEFAULT);
-            tfStaticSubscription = ros2Node.CreateSubscription<TFMessage>(tfStaticTopic, OnTfMessageReceived, tfStaticQos);
-        }
+            ros2Node = ros2Unity.CreateNode(resolvedNodeName);
 
-        Debug.Log($"[TF_Suscriber] Suscrito a {tfTopic} y {tfStaticTopic} con nodo {resolvedNodeName}");
+            if (ros2Node == null)
+            {
+                Debug.LogError($"[TF_Suscriber] No se pudo crear el nodo ROS2 '{resolvedNodeName}'.");
+                return;
+            }
+
+            QualityOfServiceProfile tfQos = new QualityOfServiceProfile(QosPresetProfile.SENSOR_DATA);
+            tfSubscription = ros2Node.CreateSubscription<TFMessage>(normalizedTfTopic, OnTfMessageReceived, tfQos);
+
+            if (!string.IsNullOrWhiteSpace(normalizedTfStaticTopic))
+            {
+                QualityOfServiceProfile tfStaticQos = new QualityOfServiceProfile(QosPresetProfile.PARAMETER_EVENTS);
+                tfStaticSubscription = ros2Node.CreateSubscription<TFMessage>(normalizedTfStaticTopic, OnTfMessageReceived, tfStaticQos);
+            }
+
+            warnedInitException = false;
+            Debug.Log($"[TF_Suscriber] Suscrito a {normalizedTfTopic} y {normalizedTfStaticTopic} con nodo {resolvedNodeName}");
+        }
+        catch (Exception ex)
+        {
+            CleanupRos2Resources();
+
+            if (!warnedInitException)
+            {
+                Debug.LogError($"[TF_Suscriber] Fallo al inicializar suscripciones TF. Nodo='{resolvedNodeName}', tfTopic='{normalizedTfTopic}', tfStaticTopic='{normalizedTfStaticTopic}'. Excepcion: {ex.GetType().Name}: {ex.Message}");
+                warnedInitException = true;
+            }
+        }
     }
 
     private void OnTfMessageReceived(TFMessage message)
@@ -160,7 +185,7 @@ public class TF_Suscriber : MonoBehaviour
             for (int i = 0; i < message.Transforms.Length; i++)
             {
                 geometry_msgs.msg.TransformStamped transformStamped = message.Transforms[i];
-                if (transformStamped == null)
+                if (transformStamped == null || transformStamped.Transform == null)
                 {
                     continue;
                 }
@@ -232,6 +257,65 @@ public class TF_Suscriber : MonoBehaviour
         return parentFrame + "->" + childFrame;
     }
 
+    private static string NormalizeTopicName(string topic)
+    {
+        if (string.IsNullOrWhiteSpace(topic))
+        {
+            return string.Empty;
+        }
+
+        string normalized = topic.Trim();
+        if (!normalized.StartsWith("/"))
+        {
+            normalized = "/" + normalized;
+        }
+
+        return normalized;
+    }
+
+    private static string BuildResolvedNodeName(string configuredNodeName, string gameObjectName, int instanceId)
+    {
+        string baseName = string.IsNullOrWhiteSpace(configuredNodeName) ? "tf_subscriber" : configuredNodeName;
+        string rawName = $"{baseName}_{gameObjectName}_{Mathf.Abs(instanceId)}";
+        return SanitizeRosNodeName(rawName);
+    }
+
+    private static string SanitizeRosNodeName(string nodeNameRaw)
+    {
+        if (string.IsNullOrWhiteSpace(nodeNameRaw))
+        {
+            return "tf_subscriber";
+        }
+
+        char[] chars = nodeNameRaw.ToLowerInvariant().ToCharArray();
+        for (int i = 0; i < chars.Length; i++)
+        {
+            char current = chars[i];
+            if (!char.IsLetterOrDigit(current) && current != '_')
+            {
+                chars[i] = '_';
+            }
+        }
+
+        string sanitized = new string(chars).Trim('_');
+        while (sanitized.Contains("__"))
+        {
+            sanitized = sanitized.Replace("__", "_");
+        }
+
+        if (string.IsNullOrEmpty(sanitized))
+        {
+            sanitized = "tf_subscriber";
+        }
+
+        if (char.IsDigit(sanitized[0]))
+        {
+            sanitized = "n_" + sanitized;
+        }
+
+        return sanitized;
+    }
+
     private static double ToSeconds(builtin_interfaces.msg.Time timeMessage)
     {
         if (timeMessage == null)
@@ -242,25 +326,48 @@ public class TF_Suscriber : MonoBehaviour
         return timeMessage.Sec + timeMessage.Nanosec * 1e-9;
     }
 
-    private void OnDestroy()
+    private void CleanupRos2Resources()
     {
         if (tfSubscription != null && ros2Node != null)
         {
-            ros2Node.RemoveSubscription<TFMessage>(tfSubscription);
+            try
+            {
+                ros2Node.RemoveSubscription<TFMessage>(tfSubscription);
+            }
+            catch
+            {
+            }
             tfSubscription = null;
         }
 
         if (tfStaticSubscription != null && ros2Node != null)
         {
-            ros2Node.RemoveSubscription<TFMessage>(tfStaticSubscription);
+            try
+            {
+                ros2Node.RemoveSubscription<TFMessage>(tfStaticSubscription);
+            }
+            catch
+            {
+            }
             tfStaticSubscription = null;
         }
 
         if (ros2Node != null && ros2Unity != null)
         {
-            ros2Unity.RemoveNode(ros2Node);
+            try
+            {
+                ros2Unity.RemoveNode(ros2Node);
+            }
+            catch
+            {
+            }
             ros2Node = null;
         }
+    }
+
+    private void OnDestroy()
+    {
+        CleanupRos2Resources();
 
         if (Instance == this)
         {
