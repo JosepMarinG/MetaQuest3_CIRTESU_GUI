@@ -47,6 +47,7 @@ public class QuestPositionControl : MonoBehaviour
     private UnityEngine.Quaternion worldReferenceRotationUnity;
 
     public ToggleIconFeedback iconFeedback;
+    public TF_Suscriber tfSubscriber;
 
     void Awake()
     {
@@ -326,16 +327,24 @@ public class QuestPositionControl : MonoBehaviour
 
     private bool TryCaptureWorldReferenceFromTf()
     {
-        TF_Suscriber tfSubscriber = TF_Suscriber.Instance;
-        if (tfSubscriber == null || !tfSubscriber.IsReady)
+        TF_Suscriber subscriber = tfSubscriber != null ? tfSubscriber : TF_Suscriber.Instance;
+        if (subscriber == null)
         {
-            Debug.LogWarning("[QuestPositionControl] TF_Suscriber no esta listo.");
+            Debug.LogWarning("[QuestPositionControl] TF_Suscriber instance es null (ni asignado ni singleton).");
             return false;
         }
 
-        if (!tfSubscriber.TryGetTransform(tfWorldFrame, tfToolFrame, out TF_Suscriber.TFData tfData))
+        Debug.Log($"[QuestPositionControl] TF_Suscriber encontrado. IsReady={subscriber.IsReady}, Mensajes={subscriber.TotalTfMessages}, Updates={subscriber.TotalTransformUpdates}, Links={subscriber.UniqueTransformCount}.");
+
+        if (!subscriber.IsReady)
         {
-            if (!tfSubscriber.TryGetTransform(tfToolFrame, tfWorldFrame, out TF_Suscriber.TFData inverseTfData))
+            Debug.LogWarning($"[QuestPositionControl] TF_Suscriber no esta listo (IsReady=false). Mensajes recibidos={subscriber.TotalTfMessages}, Updates={subscriber.TotalTransformUpdates}, Links={subscriber.UniqueTransformCount}.");
+            return false;
+        }
+
+        if (!subscriber.TryGetTransform(tfWorldFrame, tfToolFrame, out TF_Suscriber.TFData tfData))
+        {
+            if (!subscriber.TryGetTransform(tfToolFrame, tfWorldFrame, out TF_Suscriber.TFData inverseTfData))
             {
                 Debug.LogWarning($"[QuestPositionControl] No se encontro TF ni directa ni inversa entre '{tfWorldFrame}' y '{tfToolFrame}'.");
                 return false;

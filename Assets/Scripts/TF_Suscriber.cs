@@ -31,12 +31,36 @@ public class TF_Suscriber : MonoBehaviour
     private bool warnedRos2NotReady;
     private bool warnedInitException;
 
+    [Header("Debug")]
+    [SerializeField] private bool verboseDebugLogs = true;
+    [SerializeField] private int messageSummaryEveryN = 50;
+
     private readonly object tfLock = new object();
     private readonly Dictionary<string, TFData> transformsByLink = new Dictionary<string, TFData>();
     private readonly Dictionary<string, TFData> latestTransformByChild = new Dictionary<string, TFData>();
 
     private int totalTfMessages;
     private int totalTransformUpdates;
+
+        private int updateCounter = 0;
+
+    private void LogInfo(string message)
+    {
+        if (verboseDebugLogs)
+        {
+            Debug.Log($"[TF_Subscriber] {message}");
+        }
+    }
+
+    private void LogWarn(string message)
+    {
+        Debug.LogWarning($"[TF_Subscriber] {message}");
+    }
+
+    private void LogError(string message)
+    {
+        Debug.LogError($"[TF_Subscriber] {message}");
+    }
 
     public bool IsReady => ros2Node != null && tfSubscription != null;
     public int UniqueTransformCount
@@ -76,16 +100,26 @@ public class TF_Suscriber : MonoBehaviour
     {
         if (Instance != null && Instance != this)
         {
+            LogWarn($"Instancia duplicada detectada en '{gameObject.name}'. Se destruye el componente duplicado.");
             Destroy(this);
             return;
         }
 
         Instance = this;
+        LogInfo($"Instancia activa asignada en '{gameObject.name}'.");
     }
 
     private void Start()
     {
         ros2Unity = UnityEngine.Object.FindAnyObjectByType<ROS2UnityComponent>();
+        if (ros2Unity != null)
+        {
+            LogInfo("ROS2UnityComponent encontrado en Start().");
+        }
+        else
+        {
+            LogWarn("ROS2UnityComponent no encontrado en Start(). Se reintentara en Update().");
+        }
     }
 
     private void Update()
@@ -94,6 +128,18 @@ public class TF_Suscriber : MonoBehaviour
         {
             TryInitializeSubscription();
         }
+        }
+
+        private void LateUpdate()
+        {
+            updateCounter++;
+            if (updateCounter % 300 == 0)
+            {
+                if (tfSubscription != null && totalTfMessages == 0)
+                {
+                    LogWarn($"Suscripcion activa desde hace ~{updateCounter / 60}s, pero CERO mensajes recibidos. IsReady={IsReady}, tfTopic={tfTopic}, tfStaticTopic={tfStaticTopic}.");
+                }
+            }
     }
 
     private void TryInitializeSubscription()
@@ -105,12 +151,16 @@ public class TF_Suscriber : MonoBehaviour
             {
                 if (!warnedMissingRos2Unity)
                 {
-                    Debug.LogWarning("[TF_Suscriber] No se encontro ROS2UnityComponent en la escena.");
+                    LogWarn("No se encontro ROS2UnityComponent en la escena.");
                     warnedMissingRos2Unity = true;
                 }
                 return;
             }
 
+            if (verboseDebugLogs)
+            {
+                LogInfo("ROS2UnityComponent encontrado en TryInitializeSubscription().");
+            }
             warnedMissingRos2Unity = false;
         }
 
@@ -118,24 +168,30 @@ public class TF_Suscriber : MonoBehaviour
         {
             if (!warnedRos2NotReady)
             {
-                Debug.LogWarning("[TF_Suscriber] ROS2UnityComponent existe, pero ROS2 aun no esta listo (Ok() == false).");
+                LogWarn("ROS2UnityComponent existe, pero ROS2 aun no esta listo (Ok() == false).");
                 warnedRos2NotReady = true;
             }
             return;
         }
 
+        if (verboseDebugLogs && warnedRos2NotReady)
+        {
+            LogInfo("ROS2 ahora esta listo (Ok() == true).");
+        }
         warnedRos2NotReady = false;
 
         string normalizedTfTopic = NormalizeTopicName(tfTopic);
         if (string.IsNullOrEmpty(normalizedTfTopic))
         {
             normalizedTfTopic = "/tf";
-            Debug.LogWarning("[TF_Suscriber] El topic TF principal estaba vacio. Se usara '/tf'.");
+            LogWarn("El topic TF principal estaba vacio. Se usara '/tf'.");
         }
 
         string normalizedTfStaticTopic = NormalizeTopicName(tfStaticTopic);
         string gameObjectName = gameObject != null ? gameObject.name : "GameObject";
         string resolvedNodeName = BuildResolvedNodeName(nodeName, gameObjectName, GetInstanceID());
+
+        LogInfo($"Intentando inicializar suscripciones: tfTopic='{normalizedTfTopic}', tfStaticTopic='{normalizedTfStaticTopic}', nodo='{resolvedNodeName}'.");
 
         try
         {
@@ -143,21 +199,46 @@ public class TF_Suscriber : MonoBehaviour
 
             if (ros2Node == null)
             {
-                Debug.LogError($"[TF_Suscriber] No se pudo crear el nodo ROS2 '{resolvedNodeName}'.");
+                LogError($"No se pudo crear el nodo ROS2 '{resolvedNodeName}'.");
                 return;
             }
 
-            QualityOfServiceProfile tfQos = new QualityOfServiceProfile(QosPresetProfile.SENSOR_DATA);
-            tfSubscription = ros2Node.CreateSubscription<TFMessage>(normalizedTfTopic, OnTfMessageReceived, tfQos);
+            LogInfo($"Nodo ROS2 creado: '{resolvedNodeName}'.");
+
+            tfSubscription = ros2Node.CreateSubscription<TFMessage>(normalizedTfTopic, OnTfMessageReceived);
+
+            if (tfSubscription != null)
+            {
+                LogInfo($"Suscripción creada para topic {normalizedTfTopic}.");
+                    LogInfo($"Esperando mensajes en {normalizedTfTopic}...");
+                LogInfo("QoS usado para /tf: default de ROS2ForUnity (sin perfil explicito).");
+            }
+            else
+            {
+                LogError($"CreateSubscription devolvio null para topic {normalizedTfTopic}.");
+            }
 
             if (!string.IsNullOrWhiteSpace(normalizedTfStaticTopic))
             {
-                QualityOfServiceProfile tfStaticQos = new QualityOfServiceProfile(QosPresetProfile.PARAMETER_EVENTS);
-                tfStaticSubscription = ros2Node.CreateSubscription<TFMessage>(normalizedTfStaticTopic, OnTfMessageReceived, tfStaticQos);
+                tfStaticSubscription = ros2Node.CreateSubscription<TFMessage>(normalizedTfStaticTopic, OnTfMessageReceived);
+
+                if (tfStaticSubscription != null)
+                {
+                    LogInfo($"Suscripción creada para topic {normalizedTfStaticTopic}.");
+                    LogInfo("QoS usado para /tf_static: default de ROS2ForUnity (sin perfil explicito).");
+                }
+                else
+                {
+                    LogError($"CreateSubscription devolvio null para topic {normalizedTfStaticTopic}.");
+                }
+            }
+            else
+            {
+                LogWarn("Topic TF_static esta vacio o null. No se creara suscripcion para TF estaticos.");
             }
 
             warnedInitException = false;
-            Debug.Log($"[TF_Suscriber] Suscrito a {normalizedTfTopic} y {normalizedTfStaticTopic} con nodo {resolvedNodeName}");
+            LogInfo($"Suscrito a {normalizedTfTopic} y {normalizedTfStaticTopic} con nodo {resolvedNodeName}.");
         }
         catch (Exception ex)
         {
@@ -165,7 +246,7 @@ public class TF_Suscriber : MonoBehaviour
 
             if (!warnedInitException)
             {
-                Debug.LogError($"[TF_Suscriber] Fallo al inicializar suscripciones TF. Nodo='{resolvedNodeName}', tfTopic='{normalizedTfTopic}', tfStaticTopic='{normalizedTfStaticTopic}'. Excepcion: {ex.GetType().Name}: {ex.Message}");
+                LogError($"Fallo al inicializar suscripciones TF. Nodo='{resolvedNodeName}', tfTopic='{normalizedTfTopic}', tfStaticTopic='{normalizedTfStaticTopic}'. Excepcion: {ex.GetType().Name}: {ex.Message}");
                 warnedInitException = true;
             }
         }
@@ -173,8 +254,11 @@ public class TF_Suscriber : MonoBehaviour
 
     private void OnTfMessageReceived(TFMessage message)
     {
+            LogInfo($"[CALLBACK] OnTfMessageReceived invocado. Message es {(message == null ? "NULL" : "valido")}, Transforms es {(message?.Transforms == null ? "NULL" : "valido")}.");
+        
         if (message == null || message.Transforms == null)
         {
+            LogWarn("Mensaje TF recibido pero es null o Transforms es null.");
             return;
         }
 
@@ -182,11 +266,17 @@ public class TF_Suscriber : MonoBehaviour
         {
             totalTfMessages++;
 
+            if (totalTfMessages == 1)
+            {
+                LogInfo($"===== PRIMER MENSAJE TF RECIBIDO ===== Con {message.Transforms.Length} transforms.");
+            }
+
             for (int i = 0; i < message.Transforms.Length; i++)
             {
                 geometry_msgs.msg.TransformStamped transformStamped = message.Transforms[i];
                 if (transformStamped == null || transformStamped.Transform == null)
                 {
+                    LogWarn($"Transform {i} es null o su Transform es null.");
                     continue;
                 }
 
@@ -194,6 +284,7 @@ public class TF_Suscriber : MonoBehaviour
                 string childFrame = NormalizeFrameId(transformStamped.Child_frame_id);
                 if (string.IsNullOrEmpty(childFrame))
                 {
+                    LogWarn($"Transform {i} tiene childFrame vacio.");
                     continue;
                 }
 
@@ -209,19 +300,36 @@ public class TF_Suscriber : MonoBehaviour
                     StampSeconds = ToSeconds(transformStamped.Header != null ? transformStamped.Header.Stamp : null)
                 };
 
-                transformsByLink[BuildLinkKey(parentFrame, childFrame)] = tfData;
+                string linkKey = BuildLinkKey(parentFrame, childFrame);
+                transformsByLink[linkKey] = tfData;
                 latestTransformByChild[childFrame] = tfData;
                 totalTransformUpdates++;
+
+                LogInfo($"Transform agregado: '{parentFrame}' -> '{childFrame}'.");
+            }
+
+            int summaryEvery = Mathf.Max(1, messageSummaryEveryN);
+            if (verboseDebugLogs && totalTfMessages % summaryEvery == 0)
+            {
+                LogInfo($"Resumen TF: mensajes={totalTfMessages}, updates={totalTransformUpdates}, links={transformsByLink.Count}.");
             }
         }
     }
 
     public bool TryGetTransform(string parentFrame, string childFrame, out TFData tfData)
     {
-        string linkKey = BuildLinkKey(NormalizeFrameId(parentFrame), NormalizeFrameId(childFrame));
+        string normalizedParent = NormalizeFrameId(parentFrame);
+        string normalizedChild = NormalizeFrameId(childFrame);
+        string linkKey = BuildLinkKey(normalizedParent, normalizedChild);
         lock (tfLock)
         {
-            return transformsByLink.TryGetValue(linkKey, out tfData);
+            bool found = transformsByLink.TryGetValue(linkKey, out tfData);
+            if (!found && verboseDebugLogs)
+            {
+                string availableLinks = transformsByLink.Count > 0 ? string.Join(", ", transformsByLink.Keys) : "NINGUNO";
+                LogInfo($"TryGetTransform miss: '{normalizedParent}' -> '{normalizedChild}'. Links disponibles: {availableLinks} (total={transformsByLink.Count}).");
+            }
+            return found;
         }
     }
 
@@ -367,11 +475,13 @@ public class TF_Suscriber : MonoBehaviour
 
     private void OnDestroy()
     {
+        LogInfo("OnDestroy llamado. Liberando recursos ROS2.");
         CleanupRos2Resources();
 
         if (Instance == this)
         {
             Instance = null;
+            LogInfo("Instance limpiada.");
         }
     }
 }
