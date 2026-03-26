@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem.Controls;
+using UnityEngine.Rendering;
 
 public class WaypointPlacementController : MonoBehaviour
 {
@@ -27,6 +28,14 @@ public class WaypointPlacementController : MonoBehaviour
     [Tooltip("Tiempo mínimo tras activar para evitar colocar un waypoint con el mismo click del botón UI.")]
     public float activationClickGuardTime = 0.2f;
 
+    [Header("Visual del Rayo (Opcional)")]
+    public bool showPlacementRay = true;
+    public LineRenderer placementRayRenderer;
+    public GameObject hitIndicator;
+    public float missRayLength = 20f;
+    public float lineWidth = 0.005f;
+    public Color lineColor = Color.cyan;
+
     [Tooltip("Si está activo, deshabilita scripts para evitar interferencias durante el modo creación.")]
     public MonoBehaviour[] behavioursToDisableWhilePlacing;
 
@@ -43,15 +52,28 @@ public class WaypointPlacementController : MonoBehaviour
     private List<GameObject> waypoints = new List<GameObject>();
 
     private float activationTime = -999f;
+    private Material runtimeLineMaterial;
 
     public IReadOnlyList<GameObject> Waypoints => waypoints;
 
     private void Start()
     {
         ApplyPlacementModeState(false);
+        EnsurePlacementRayRenderer();
+        SetRayVisualActive(false);
+        UpdateHitIndicator(false, Vector3.zero, Vector3.up);
         if (iconFeedback != null)
         {
             iconFeedback.UpdateIcon(isActivated);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (runtimeLineMaterial != null)
+        {
+            Destroy(runtimeLineMaterial);
+            runtimeLineMaterial = null;
         }
     }
 
@@ -59,17 +81,25 @@ public class WaypointPlacementController : MonoBehaviour
     {
         if (!isActivated)
         {
+            SetRayVisualActive(false);
+            UpdateHitIndicator(false, Vector3.zero, Vector3.up);
             return;
         }
 
         if (rightRayOrigin == null)
         {
+            SetRayVisualActive(false);
+            UpdateHitIndicator(false, Vector3.zero, Vector3.up);
             if (debugLogs)
             {
                 Debug.LogWarning("[WaypointPlacement] rightRayOrigin no asignado.");
             }
             return;
         }
+
+        bool hasHit = TryGetMapHit(out RaycastHit hit);
+        UpdateRayVisual(hasHit ? hit.point : rightRayOrigin.position + (rightRayOrigin.forward * missRayLength));
+        UpdateHitIndicator(hasHit, hasHit ? hit.point : Vector3.zero, hasHit ? hit.normal : Vector3.up);
 
         if (Time.time - activationTime < activationClickGuardTime)
         {
@@ -88,7 +118,7 @@ public class WaypointPlacementController : MonoBehaviour
             return;
         }
 
-        if (TryGetMapHit(out RaycastHit hit))
+        if (hasHit)
         {
             CreateWaypoint(hit.point, hit.normal);
         }
@@ -100,6 +130,11 @@ public class WaypointPlacementController : MonoBehaviour
         activationTime = Time.time;
 
         ApplyPlacementModeState(isActivated);
+        SetRayVisualActive(isActivated);
+        if (!isActivated)
+        {
+            UpdateHitIndicator(false, Vector3.zero, Vector3.up);
+        }
 
         if (iconFeedback != null)
         {
@@ -152,6 +187,132 @@ public class WaypointPlacementController : MonoBehaviour
     {
         Ray ray = new Ray(rightRayOrigin.position, rightRayOrigin.forward);
         return Physics.Raycast(ray, out hit, rayDistance, minimapLayerMask, QueryTriggerInteraction.Ignore);
+    }
+
+    private void UpdateRayVisual(Vector3 endPoint)
+    {
+        EnsurePlacementRayRenderer();
+
+        if (!showPlacementRay || placementRayRenderer == null || rightRayOrigin == null)
+        {
+            return;
+        }
+
+        if (!placementRayRenderer.enabled)
+        {
+            placementRayRenderer.enabled = true;
+        }
+
+        if (placementRayRenderer.positionCount != 2)
+        {
+            placementRayRenderer.positionCount = 2;
+        }
+
+        placementRayRenderer.SetPosition(0, rightRayOrigin.position);
+        placementRayRenderer.SetPosition(1, endPoint);
+    }
+
+    private void SetRayVisualActive(bool active)
+    {
+        EnsurePlacementRayRenderer();
+
+        if (placementRayRenderer == null)
+        {
+            return;
+        }
+
+        placementRayRenderer.enabled = active && showPlacementRay;
+    }
+
+    private void EnsurePlacementRayRenderer()
+    {
+        if (placementRayRenderer == null)
+        {
+            GameObject lineObject = new GameObject("WaypointPlacementRay");
+            lineObject.transform.SetParent(transform, false);
+            placementRayRenderer = lineObject.AddComponent<LineRenderer>();
+        }
+
+        placementRayRenderer.useWorldSpace = true;
+        placementRayRenderer.positionCount = 2;
+        placementRayRenderer.startWidth = lineWidth;
+        placementRayRenderer.endWidth = lineWidth;
+        placementRayRenderer.startColor = lineColor;
+        placementRayRenderer.endColor = lineColor;
+        placementRayRenderer.numCapVertices = 8;
+        placementRayRenderer.numCornerVertices = 8;
+        placementRayRenderer.textureMode = LineTextureMode.Stretch;
+        placementRayRenderer.alignment = LineAlignment.View;
+        placementRayRenderer.shadowCastingMode = ShadowCastingMode.Off;
+        placementRayRenderer.receiveShadows = false;
+        placementRayRenderer.lightProbeUsage = LightProbeUsage.Off;
+        placementRayRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        placementRayRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+        placementRayRenderer.allowOcclusionWhenDynamic = false;
+        placementRayRenderer.material = GetOrCreateXrSafeLineMaterial();
+    }
+
+    private Material GetOrCreateXrSafeLineMaterial()
+    {
+        if (runtimeLineMaterial != null)
+        {
+            ApplyLineColor(runtimeLineMaterial);
+            return runtimeLineMaterial;
+        }
+
+        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+        if (shader == null) shader = Shader.Find("Unlit/Color");
+        if (shader == null) shader = Shader.Find("Sprites/Default");
+
+        if (shader == null)
+        {
+            Debug.LogWarning("[WaypointPlacement] No se encontro shader para la linea. Se usara el material actual del LineRenderer.");
+            return placementRayRenderer != null ? placementRayRenderer.material : null;
+        }
+
+        runtimeLineMaterial = new Material(shader)
+        {
+            name = "WaypointPlacementLineMaterial"
+        };
+
+        runtimeLineMaterial.enableInstancing = true;
+        ApplyLineColor(runtimeLineMaterial);
+        return runtimeLineMaterial;
+    }
+
+    private void ApplyLineColor(Material material)
+    {
+        if (material == null) return;
+
+        if (material.HasProperty("_BaseColor"))
+        {
+            material.SetColor("_BaseColor", lineColor);
+        }
+
+        if (material.HasProperty("_Color"))
+        {
+            material.SetColor("_Color", lineColor);
+        }
+    }
+
+    private void UpdateHitIndicator(bool active, Vector3 hitPoint, Vector3 hitNormal)
+    {
+        if (hitIndicator == null)
+        {
+            return;
+        }
+
+        hitIndicator.SetActive(active && isActivated);
+        if (!hitIndicator.activeSelf)
+        {
+            return;
+        }
+
+        hitIndicator.transform.position = hitPoint;
+        if (hitNormal.sqrMagnitude > 0.0001f)
+        {
+            hitIndicator.transform.rotation = Quaternion.FromToRotation(Vector3.up, hitNormal);
+        }
     }
 
     private void CreateWaypoint(Vector3 worldPosition, Vector3 surfaceNormal)
