@@ -5,12 +5,20 @@ public class PanelWindowManager : MonoBehaviour
     [Header("Prefabs de los Paneles")]
     public GameObject monoPanelPrefab;
     public GameObject stereoPanelPrefab;
+    [Header("Mapa en Escena")]
     public GameObject mapa3d;
+    public ToggleIconFeedback mapaIconFeedback;
     public GameObject GironaPrefab;
     public GameObject CirteSubPrefab;
+    public GameObject CatamaranPrefab;
 
     [Header("Punto de Aparici�n")]
     public Transform spawnPoint; // Ponlo a 1 metro delante de la c�mara (OVRCameraRig)
+
+    private void Start()
+    {
+        SyncMapaIcon();
+    }
 
     public void SpawnMonoPanel()
     {
@@ -23,7 +31,7 @@ public class PanelWindowManager : MonoBehaviour
     }
     public void SpawnMapa3d()
     {
-        InstantiatePanel(mapa3d);
+        ToggleMapa3d();
     }
 
     public void SpawnGirona()
@@ -34,6 +42,24 @@ public class PanelWindowManager : MonoBehaviour
     public void SpawnCirteSub()
     {
         InstantiatePanel(CirteSubPrefab);
+    }
+
+    public void SpawnCatamaran()
+    {
+        InstantiatePanel(CatamaranPrefab);
+    }
+
+    public void ToggleMapa3d()
+    {
+        if (mapa3d == null) return;
+        mapa3d.SetActive(!mapa3d.activeSelf);
+        SyncMapaIcon();
+    }
+
+    private void SyncMapaIcon()
+    {
+        if (mapaIconFeedback == null) return;
+        mapaIconFeedback.UpdateIcon(mapa3d != null && mapa3d.activeSelf);
     }
 
     private void InstantiatePanel(GameObject prefab)
