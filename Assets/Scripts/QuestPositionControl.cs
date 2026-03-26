@@ -23,13 +23,16 @@ public class QuestPositionControl : MonoBehaviour
     public float publishRate = 10f; // Hz - Limitar a 10 publicaciones por segundo
 
     [Header("TF Goal en Mundo")]
-    public string tfWorldFrame = "world_net";
+    public string tfWorldFrame = "world_ned";
     public string tfToolFrame = "girona500/bravo/gripper/camera";
     public bool requireTfAtStart = true;
 
     [Header("Referencias Visuales")]
     public GameObject originVisualPrefab;
     private GameObject activeVisual;
+    public GameObject gripperVisualPrefab;
+    private GameObject activeGripperVisual;
+    public GripperVisualController gripperVisualController;
     public LineRenderer controlLine;
     public float lineWidth = 0.005f;
     public Color lineColor = Color.cyan;
@@ -42,9 +45,7 @@ public class QuestPositionControl : MonoBehaviour
     private UnityEngine.Quaternion anchorRotation;
     private float publishTimer = 0f;
     private Material runtimeLineMaterial;
-    private bool hasWorldTfReference = false;
-    private UnityEngine.Vector3 worldReferencePositionUnity;
-    private UnityEngine.Quaternion worldReferenceRotationUnity;
+    public QuestTransformCalculator transformCalculator;
 
     public ToggleIconFeedback iconFeedback;
     public TF_Suscriber tfSubscriber;
@@ -72,7 +73,19 @@ public class QuestPositionControl : MonoBehaviour
             activeVisual.SetActive(false);
         }
 
+        if (gripperVisualPrefab != null)
+        {
+            activeGripperVisual = Instantiate(gripperVisualPrefab);
+            activeGripperVisual.SetActive(false);
+
+            if (gripperVisualController == null)
+            {
+                gripperVisualController = activeGripperVisual.GetComponent<GripperVisualController>();
+            }
+        }
+
         EnsureLineRenderer();
+        EnsureTransformCalculator();
         SetPublishedValuesText(string.Empty);
 
         // Llamamos al cambio de icono
@@ -94,12 +107,22 @@ public class QuestPositionControl : MonoBehaviour
             Destroy(runtimeLineMaterial);
             runtimeLineMaterial = null;
         }
+
+        if (activeGripperVisual != null)
+        {
+            Destroy(activeGripperVisual);
+            activeGripperVisual = null;
+        }
     }
 
     void Update()
     {
         // 1. Bloqueo de seguridad: si no esta activado, no hacemos nada
-        if (!isActivated) return;
+        if (!isActivated)
+        {
+            SetGripperVisualActive(false);
+            return;
+        }
 
         if (ros2Node == null && ros2Unity != null && ros2Unity.Ok())
         {
@@ -108,7 +131,14 @@ public class QuestPositionControl : MonoBehaviour
         }
 
         var rightHand = UnityEngine.InputSystem.XR.XRController.rightHand;
-        if (rightHand == null) return;
+        if (rightHand == null)
+        {
+            SetGripperVisualActive(false);
+            return;
+        }
+
+        UpdateGripperVisual(rightHand);
+        UpdateGripperClosing(rightHand);
 
         var gripAction = rightHand["gripPressed"] as UnityEngine.InputSystem.Controls.ButtonControl;
 
@@ -148,6 +178,7 @@ public class QuestPositionControl : MonoBehaviour
             isControlling = false;
             if (activeVisual != null) activeVisual.SetActive(false);
             if (controlLine != null) controlLine.enabled = false;
+            SetGripperVisualActive(false);
             StopVibration();
             SetPublishedValuesText(string.Empty);
         }
@@ -158,8 +189,10 @@ public class QuestPositionControl : MonoBehaviour
         anchorPosition = hand.devicePosition.ReadValue();
         anchorRotation = hand.deviceRotation.ReadValue();
 
-        hasWorldTfReference = TryCaptureWorldReferenceFromTf();
-        if (requireTfAtStart && !hasWorldTfReference)
+        EnsureTransformCalculator();
+        transformCalculator.BeginControl(anchorPosition, anchorRotation, tfSubscriber, tfWorldFrame, tfToolFrame);
+
+        if (requireTfAtStart && !transformCalculator.HasWorldTfReference)
         {
             Debug.LogWarning("[QuestPositionControl] TF no disponible al iniciar. Se mantiene feedback local mientras se espera TF de mundo.");
             SetPublishedValuesText($"Esperando TF: {tfWorldFrame} -> {tfToolFrame}");
@@ -189,52 +222,36 @@ public class QuestPositionControl : MonoBehaviour
     {
         if (posePublisher == null) return;
 
-        if (!hasWorldTfReference)
-        {
-            hasWorldTfReference = TryCaptureWorldReferenceFromTf();
-        }
-
-        if (requireTfAtStart && !hasWorldTfReference)
-        {
-            SetPublishedValuesText($"Esperando TF: {tfWorldFrame} -> {tfToolFrame}");
-            return;
-        }
+        EnsureTransformCalculator();
 
         UnityEngine.Vector3 currentPosition = hand.devicePosition.ReadValue();
         UnityEngine.Quaternion currentRotation = hand.deviceRotation.ReadValue();
 
-        UnityEngine.Vector3 worldDeltaPos = currentPosition - anchorPosition;
-        UnityEngine.Vector3 localDeltaPos = UnityEngine.Quaternion.Inverse(anchorRotation) * worldDeltaPos;
-        UnityEngine.Quaternion deltaRotUnity = UnityEngine.Quaternion.Inverse(anchorRotation) * currentRotation;
-        deltaRotUnity = UnityEngine.Quaternion.Normalize(deltaRotUnity);
-
-        UnityEngine.Vector3 targetPositionUnity = localDeltaPos;
-        UnityEngine.Quaternion targetRotationUnity = deltaRotUnity;
-        string outputFrameId = frameId;
-
-        if (hasWorldTfReference)
+        if (!transformCalculator.TryComputeTargetPose(
+            currentPosition,
+            currentRotation,
+            requireTfAtStart,
+            frameId,
+            tfWorldFrame,
+            out QuestTransformCalculator.PoseComputationResult poseResult,
+            out string blockReason))
         {
-            targetPositionUnity = worldReferencePositionUnity + (worldReferenceRotationUnity * localDeltaPos);
-            targetRotationUnity = worldReferenceRotationUnity * deltaRotUnity;
-            targetRotationUnity = UnityEngine.Quaternion.Normalize(targetRotationUnity);
-            outputFrameId = tfWorldFrame;
+            SetPublishedValuesText(blockReason);
+            return;
         }
 
-        UnityEngine.Vector3 rosDeltaPos = ConvertUnityVectorToRos(targetPositionUnity);
-        UnityEngine.Quaternion rosDeltaRot = ConvertUnityQuaternionToRos(targetRotationUnity);
-
         geometry_msgs.msg.PoseStamped msg = new geometry_msgs.msg.PoseStamped();
-        msg.Header.Frame_id = outputFrameId;
+        msg.Header.Frame_id = poseResult.OutputFrameId;
         msg.Header.Stamp = GetRosTimeManual();
 
-        msg.Pose.Position.X = rosDeltaPos.x;
-        msg.Pose.Position.Y = rosDeltaPos.y;
-        msg.Pose.Position.Z = rosDeltaPos.z;
+        msg.Pose.Position.X = poseResult.RosPosition.x;
+        msg.Pose.Position.Y = poseResult.RosPosition.y;
+        msg.Pose.Position.Z = poseResult.RosPosition.z;
 
-        msg.Pose.Orientation.X = rosDeltaRot.x;
-        msg.Pose.Orientation.Y = rosDeltaRot.y;
-        msg.Pose.Orientation.Z = rosDeltaRot.z;
-        msg.Pose.Orientation.W = rosDeltaRot.w;
+        msg.Pose.Orientation.X = poseResult.RosRotation.x;
+        msg.Pose.Orientation.Y = poseResult.RosRotation.y;
+        msg.Pose.Orientation.Z = poseResult.RosRotation.z;
+        msg.Pose.Orientation.W = poseResult.RosRotation.w;
 
         posePublisher.Publish(msg);
 
@@ -251,6 +268,42 @@ public class QuestPositionControl : MonoBehaviour
         if (activeVisual != null) activeVisual.SetActive(false);
         if (controlLine != null) controlLine.enabled = false;
         StopVibration();
+    }
+
+    private void UpdateGripperVisual(UnityEngine.InputSystem.XR.XRController hand)
+    {
+        if (activeGripperVisual == null) return;
+
+        activeGripperVisual.transform.position = hand.devicePosition.ReadValue();
+        activeGripperVisual.transform.rotation = hand.deviceRotation.ReadValue();
+
+        if (!activeGripperVisual.activeSelf)
+        {
+            activeGripperVisual.SetActive(true);
+        }
+    }
+
+    private void SetGripperVisualActive(bool active)
+    {
+        if (activeGripperVisual == null) return;
+        if (activeGripperVisual.activeSelf != active)
+        {
+            activeGripperVisual.SetActive(active);
+        }
+
+        if (!active && gripperVisualController != null)
+        {
+            gripperVisualController.SetClosed(false);
+        }
+    }
+
+    private void UpdateGripperClosing(UnityEngine.InputSystem.XR.XRController hand)
+    {
+        if (gripperVisualController == null || hand == null) return;
+
+        var triggerAction = hand["triggerPressed"] as UnityEngine.InputSystem.Controls.ButtonControl;
+        bool shouldClose = triggerAction != null && triggerAction.isPressed;
+        gripperVisualController.SetClosed(shouldClose);
     }
 
     private void EnsureLineRenderer()
@@ -325,62 +378,15 @@ public class QuestPositionControl : MonoBehaviour
         }
     }
 
-    private bool TryCaptureWorldReferenceFromTf()
+    private void EnsureTransformCalculator()
     {
-        TF_Suscriber subscriber = tfSubscriber != null ? tfSubscriber : TF_Suscriber.Instance;
-        if (subscriber == null)
+        if (transformCalculator != null) return;
+
+        transformCalculator = GetComponent<QuestTransformCalculator>();
+        if (transformCalculator == null)
         {
-            Debug.LogWarning("[QuestPositionControl] TF_Suscriber instance es null (ni asignado ni singleton).");
-            return false;
+            transformCalculator = gameObject.AddComponent<QuestTransformCalculator>();
         }
-
-        Debug.Log($"[QuestPositionControl] TF_Suscriber encontrado. IsReady={subscriber.IsReady}, Mensajes={subscriber.TotalTfMessages}, Updates={subscriber.TotalTransformUpdates}, Links={subscriber.UniqueTransformCount}.");
-
-        if (!subscriber.IsReady)
-        {
-            Debug.LogWarning($"[QuestPositionControl] TF_Suscriber no esta listo (IsReady=false). Mensajes recibidos={subscriber.TotalTfMessages}, Updates={subscriber.TotalTransformUpdates}, Links={subscriber.UniqueTransformCount}.");
-            return false;
-        }
-
-        if (!subscriber.TryGetTransform(tfWorldFrame, tfToolFrame, out TF_Suscriber.TFData tfData))
-        {
-            if (!subscriber.TryGetTransform(tfToolFrame, tfWorldFrame, out TF_Suscriber.TFData inverseTfData))
-            {
-                Debug.LogWarning($"[QuestPositionControl] No se encontro TF ni directa ni inversa entre '{tfWorldFrame}' y '{tfToolFrame}'.");
-                return false;
-            }
-
-            UnityEngine.Vector3 inversePositionUnity = ConvertRosVectorToUnity(inverseTfData.Translation);
-            UnityEngine.Quaternion inverseRotationUnity = UnityEngine.Quaternion.Normalize(ConvertRosQuaternionToUnity(inverseTfData.Rotation));
-
-            worldReferenceRotationUnity = UnityEngine.Quaternion.Inverse(inverseRotationUnity);
-            worldReferencePositionUnity = -(worldReferenceRotationUnity * inversePositionUnity);
-            return true;
-        }
-
-        worldReferencePositionUnity = ConvertRosVectorToUnity(tfData.Translation);
-        worldReferenceRotationUnity = UnityEngine.Quaternion.Normalize(ConvertRosQuaternionToUnity(tfData.Rotation));
-        return true;
-    }
-
-    private UnityEngine.Vector3 ConvertUnityVectorToRos(UnityEngine.Vector3 unityVector)
-    {
-        return new UnityEngine.Vector3(unityVector.z, -unityVector.x, unityVector.y);
-    }
-
-    private UnityEngine.Quaternion ConvertUnityQuaternionToRos(UnityEngine.Quaternion unityQuaternion)
-    {
-        return new UnityEngine.Quaternion(unityQuaternion.z, -unityQuaternion.x, unityQuaternion.y, unityQuaternion.w);
-    }
-
-    private UnityEngine.Vector3 ConvertRosVectorToUnity(UnityEngine.Vector3 rosVector)
-    {
-        return new UnityEngine.Vector3(-rosVector.y, rosVector.z, rosVector.x);
-    }
-
-    private UnityEngine.Quaternion ConvertRosQuaternionToUnity(UnityEngine.Quaternion rosQuaternion)
-    {
-        return new UnityEngine.Quaternion(-rosQuaternion.y, rosQuaternion.z, rosQuaternion.x, rosQuaternion.w);
     }
 
     private void UpdateControlLine(UnityEngine.InputSystem.XR.XRController hand)

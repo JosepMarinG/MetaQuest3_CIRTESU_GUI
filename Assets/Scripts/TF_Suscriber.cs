@@ -39,6 +39,22 @@ public class TF_Suscriber : MonoBehaviour
     private readonly Dictionary<string, TFData> transformsByLink = new Dictionary<string, TFData>();
     private readonly Dictionary<string, TFData> latestTransformByChild = new Dictionary<string, TFData>();
 
+    private struct GraphEdge
+    {
+        public string TargetFrame;
+        public Vector3 Translation;
+        public Quaternion Rotation;
+        public double StampSeconds;
+    }
+
+    private struct GraphState
+    {
+        public string Frame;
+        public Vector3 Translation;
+        public Quaternion Rotation;
+        public double StampSeconds;
+    }
+
     private int totalTfMessages;
     private int totalTransformUpdates;
 
@@ -320,17 +336,184 @@ public class TF_Suscriber : MonoBehaviour
     {
         string normalizedParent = NormalizeFrameId(parentFrame);
         string normalizedChild = NormalizeFrameId(childFrame);
-        string linkKey = BuildLinkKey(normalizedParent, normalizedChild);
+
+        if (string.IsNullOrEmpty(normalizedParent) || string.IsNullOrEmpty(normalizedChild))
+        {
+            tfData = default;
+            return false;
+        }
+
+        if (normalizedParent == normalizedChild)
+        {
+            tfData = new TFData
+            {
+                ParentFrame = normalizedParent,
+                ChildFrame = normalizedChild,
+                Translation = Vector3.zero,
+                Rotation = Quaternion.identity,
+                StampSeconds = 0d
+            };
+            return true;
+        }
+
         lock (tfLock)
         {
-            bool found = transformsByLink.TryGetValue(linkKey, out tfData);
-            if (!found && verboseDebugLogs)
+            string linkKey = BuildLinkKey(normalizedParent, normalizedChild);
+            if (transformsByLink.TryGetValue(linkKey, out tfData))
+            {
+                return true;
+            }
+
+            if (TryResolveTransformThroughGraph(normalizedParent, normalizedChild, out tfData))
+            {
+                return true;
+            }
+
+            if (verboseDebugLogs)
             {
                 string availableLinks = transformsByLink.Count > 0 ? string.Join(", ", transformsByLink.Keys) : "NINGUNO";
                 LogInfo($"TryGetTransform miss: '{normalizedParent}' -> '{normalizedChild}'. Links disponibles: {availableLinks} (total={transformsByLink.Count}).");
             }
-            return found;
+
+            return false;
         }
+    }
+
+    private bool TryResolveTransformThroughGraph(string sourceFrame, string targetFrame, out TFData tfData)
+    {
+        Dictionary<string, List<GraphEdge>> graph = BuildTransformGraph();
+        if (!graph.ContainsKey(sourceFrame))
+        {
+            tfData = default;
+            return false;
+        }
+
+        Queue<GraphState> queue = new Queue<GraphState>();
+        HashSet<string> visited = new HashSet<string>();
+
+        queue.Enqueue(new GraphState
+        {
+            Frame = sourceFrame,
+            Translation = Vector3.zero,
+            Rotation = Quaternion.identity,
+            StampSeconds = 0d
+        });
+        visited.Add(sourceFrame);
+
+        while (queue.Count > 0)
+        {
+            GraphState current = queue.Dequeue();
+            if (current.Frame == targetFrame)
+            {
+                tfData = new TFData
+                {
+                    ParentFrame = sourceFrame,
+                    ChildFrame = targetFrame,
+                    Translation = current.Translation,
+                    Rotation = Quaternion.Normalize(current.Rotation),
+                    StampSeconds = current.StampSeconds
+                };
+                return true;
+            }
+
+            if (!graph.TryGetValue(current.Frame, out List<GraphEdge> neighbors))
+            {
+                continue;
+            }
+
+            for (int i = 0; i < neighbors.Count; i++)
+            {
+                GraphEdge edge = neighbors[i];
+                if (visited.Contains(edge.TargetFrame))
+                {
+                    continue;
+                }
+
+                ComposeTransform(
+                    current.Translation,
+                    current.Rotation,
+                    edge.Translation,
+                    edge.Rotation,
+                    out Vector3 composedTranslation,
+                    out Quaternion composedRotation);
+
+                queue.Enqueue(new GraphState
+                {
+                    Frame = edge.TargetFrame,
+                    Translation = composedTranslation,
+                    Rotation = Quaternion.Normalize(composedRotation),
+                    StampSeconds = Math.Max(current.StampSeconds, edge.StampSeconds)
+                });
+                visited.Add(edge.TargetFrame);
+            }
+        }
+
+        tfData = default;
+        return false;
+    }
+
+    private Dictionary<string, List<GraphEdge>> BuildTransformGraph()
+    {
+        Dictionary<string, List<GraphEdge>> graph = new Dictionary<string, List<GraphEdge>>();
+
+        foreach (TFData tf in transformsByLink.Values)
+        {
+            if (string.IsNullOrEmpty(tf.ParentFrame) || string.IsNullOrEmpty(tf.ChildFrame))
+            {
+                continue;
+            }
+
+            AddGraphEdge(graph, tf.ParentFrame, new GraphEdge
+            {
+                TargetFrame = tf.ChildFrame,
+                Translation = tf.Translation,
+                Rotation = Quaternion.Normalize(tf.Rotation),
+                StampSeconds = tf.StampSeconds
+            });
+
+            InvertTransform(tf.Translation, tf.Rotation, out Vector3 invTranslation, out Quaternion invRotation);
+            AddGraphEdge(graph, tf.ChildFrame, new GraphEdge
+            {
+                TargetFrame = tf.ParentFrame,
+                Translation = invTranslation,
+                Rotation = Quaternion.Normalize(invRotation),
+                StampSeconds = tf.StampSeconds
+            });
+        }
+
+        return graph;
+    }
+
+    private static void AddGraphEdge(Dictionary<string, List<GraphEdge>> graph, string sourceFrame, GraphEdge edge)
+    {
+        if (!graph.TryGetValue(sourceFrame, out List<GraphEdge> edges))
+        {
+            edges = new List<GraphEdge>();
+            graph[sourceFrame] = edges;
+        }
+
+        edges.Add(edge);
+    }
+
+    private static void InvertTransform(Vector3 translation, Quaternion rotation, out Vector3 inverseTranslation, out Quaternion inverseRotation)
+    {
+        inverseRotation = Quaternion.Inverse(Quaternion.Normalize(rotation));
+        inverseTranslation = -(inverseRotation * translation);
+    }
+
+    private static void ComposeTransform(
+        Vector3 parentToCurrentTranslation,
+        Quaternion parentToCurrentRotation,
+        Vector3 currentToNextTranslation,
+        Quaternion currentToNextRotation,
+        out Vector3 parentToNextTranslation,
+        out Quaternion parentToNextRotation)
+    {
+        Quaternion normalizedCurrentToNext = Quaternion.Normalize(currentToNextRotation);
+        Quaternion normalizedParentToCurrent = Quaternion.Normalize(parentToCurrentRotation);
+
+        parentToNextRotation = normalizedCurrentToNext * normalizedParentToCurrent;
+        parentToNextTranslation = normalizedCurrentToNext * parentToCurrentTranslation + currentToNextTranslation;
     }
 
     public bool TryGetLatestTransform(string childFrame, out TFData tfData)
