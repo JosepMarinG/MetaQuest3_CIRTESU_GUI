@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using ROS2;
 using tf2_msgs.msg;
 using UnityEngine;
@@ -35,6 +36,13 @@ public class TF_Suscriber : MonoBehaviour
     [SerializeField] private bool verboseDebugLogs = true;
     [SerializeField] private int messageSummaryEveryN = 50;
 
+    [Header("Debug Query Transform")]
+    [SerializeField] private bool debugSpecificTransformQuery = false;
+    [SerializeField] private string debugQuerySourceFrame = "world_ned";
+    [SerializeField] private string debugQueryTargetFrame = "/tp_controller/tasks/bravo_ee_configuration_feedforward/target";
+    [SerializeField] private float debugQueryIntervalSeconds = 1f;
+    [SerializeField] private bool debugQueryShowResolvedPath = true;
+
     private readonly object tfLock = new object();
     private readonly Dictionary<string, TFData> transformsByLink = new Dictionary<string, TFData>();
     private readonly Dictionary<string, TFData> latestTransformByChild = new Dictionary<string, TFData>();
@@ -57,6 +65,8 @@ public class TF_Suscriber : MonoBehaviour
 
     private int totalTfMessages;
     private int totalTransformUpdates;
+    private float nextDebugQueryTime;
+    private int debugQueryCounter;
 
         private int updateCounter = 0;
 
@@ -156,6 +166,8 @@ public class TF_Suscriber : MonoBehaviour
                     LogWarn($"Suscripcion activa desde hace ~{updateCounter / 60}s, pero CERO mensajes recibidos. IsReady={IsReady}, tfTopic={tfTopic}, tfStaticTopic={tfStaticTopic}.");
                 }
             }
+
+            DebugSpecificTransformQuery();
     }
 
     private void TryInitializeSubscription()
@@ -497,7 +509,9 @@ public class TF_Suscriber : MonoBehaviour
 
     private static void InvertTransform(Vector3 translation, Quaternion rotation, out Vector3 inverseTranslation, out Quaternion inverseRotation)
     {
-        inverseRotation = Quaternion.Inverse(Quaternion.Normalize(rotation));
+        // Guarda contra quaternion degenerado
+        Quaternion normalized = rotation == default ? Quaternion.identity : Quaternion.Normalize(rotation);
+        inverseRotation = Quaternion.Inverse(normalized);
         inverseTranslation = -(inverseRotation * translation);
     }
 
@@ -512,8 +526,150 @@ public class TF_Suscriber : MonoBehaviour
         Quaternion normalizedCurrentToNext = Quaternion.Normalize(currentToNextRotation);
         Quaternion normalizedParentToCurrent = Quaternion.Normalize(parentToCurrentRotation);
 
-        parentToNextRotation = normalizedCurrentToNext * normalizedParentToCurrent;
-        parentToNextTranslation = normalizedCurrentToNext * parentToCurrentTranslation + currentToNextTranslation;
+        // Compose as T_parent_next = T_parent_current * T_current_next.
+        parentToNextRotation = normalizedParentToCurrent * normalizedCurrentToNext;
+        parentToNextTranslation = parentToCurrentTranslation + (normalizedParentToCurrent * currentToNextTranslation);
+    }
+
+    private void DebugSpecificTransformQuery()
+    {
+        if (!debugSpecificTransformQuery)
+        {
+            return;
+        }
+
+        float interval = debugQueryIntervalSeconds > 0f ? debugQueryIntervalSeconds : 0f;
+        if (interval > 0f && Time.unscaledTime < nextDebugQueryTime)
+        {
+            return;
+        }
+
+        nextDebugQueryTime = Time.unscaledTime + interval;
+
+        string sourceFrame = NormalizeFrameId(debugQuerySourceFrame);
+        string targetFrame = NormalizeFrameId(debugQueryTargetFrame);
+
+        if (string.IsNullOrEmpty(sourceFrame) || string.IsNullOrEmpty(targetFrame))
+        {
+            Debug.LogWarning("[TF_Subscriber][DebugQuery] sourceFrame o targetFrame vacios. Revisa los campos de Debug Query Transform.");
+            return;
+        }
+
+        bool found = TryGetTransform(sourceFrame, targetFrame, out TFData resolvedTf);
+        bool isDirect = false;
+        int linkCount;
+        int tfMsgCount;
+        int tfUpdateCount;
+
+        lock (tfLock)
+        {
+            isDirect = transformsByLink.ContainsKey(BuildLinkKey(sourceFrame, targetFrame));
+            linkCount = transformsByLink.Count;
+            tfMsgCount = totalTfMessages;
+            tfUpdateCount = totalTransformUpdates;
+        }
+
+        debugQueryCounter++;
+
+        if (!found)
+        {
+            Debug.LogWarning(
+                $"[TF_Subscriber][DebugQuery #{debugQueryCounter}] No se pudo resolver '{sourceFrame}' -> '{targetFrame}'. IsReady={IsReady}, Mensajes={tfMsgCount}, Updates={tfUpdateCount}, Links={linkCount}.");
+            return;
+        }
+
+        string resolutionType = isDirect ? "directa" : "compuesta";
+        string extraPathInfo = string.Empty;
+        if (debugQueryShowResolvedPath && !isDirect && TryBuildFramePath(sourceFrame, targetFrame, out string resolvedPath))
+        {
+            extraPathInfo = $", Ruta={resolvedPath}";
+        }
+
+        Debug.Log(
+            $"[TF_Subscriber][DebugQuery #{debugQueryCounter}] '{sourceFrame}' -> '{targetFrame}' ({resolutionType}) " +
+            $"Pos=({resolvedTf.Translation.x:F4}, {resolvedTf.Translation.y:F4}, {resolvedTf.Translation.z:F4}) " +
+            $"Rot=({resolvedTf.Rotation.x:F4}, {resolvedTf.Rotation.y:F4}, {resolvedTf.Rotation.z:F4}, {resolvedTf.Rotation.w:F4}) " +
+            $"Stamp={resolvedTf.StampSeconds:F6}, Links={linkCount}, Mensajes={tfMsgCount}, Updates={tfUpdateCount}{extraPathInfo}");
+    }
+
+    private bool TryBuildFramePath(string sourceFrame, string targetFrame, out string pathText)
+    {
+        pathText = string.Empty;
+
+        lock (tfLock)
+        {
+            Dictionary<string, List<GraphEdge>> graph = BuildTransformGraph();
+            if (!graph.ContainsKey(sourceFrame))
+            {
+                return false;
+            }
+
+            Queue<string> queue = new Queue<string>();
+            HashSet<string> visited = new HashSet<string>();
+            Dictionary<string, string> previous = new Dictionary<string, string>();
+
+            queue.Enqueue(sourceFrame);
+            visited.Add(sourceFrame);
+
+            bool reached = false;
+            while (queue.Count > 0)
+            {
+                string current = queue.Dequeue();
+                if (current == targetFrame)
+                {
+                    reached = true;
+                    break;
+                }
+
+                if (!graph.TryGetValue(current, out List<GraphEdge> neighbors))
+                {
+                    continue;
+                }
+
+                for (int i = 0; i < neighbors.Count; i++)
+                {
+                    string next = neighbors[i].TargetFrame;
+                    if (visited.Contains(next))
+                    {
+                        continue;
+                    }
+
+                    visited.Add(next);
+                    previous[next] = current;
+                    queue.Enqueue(next);
+                }
+            }
+
+            if (!reached)
+            {
+                return false;
+            }
+
+            List<string> frames = new List<string>();
+            string cursor = targetFrame;
+            frames.Add(cursor);
+
+            while (previous.TryGetValue(cursor, out string prev))
+            {
+                frames.Add(prev);
+                cursor = prev;
+            }
+
+            frames.Reverse();
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < frames.Count; i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append(" -> ");
+                }
+
+                builder.Append(frames[i]);
+            }
+
+            pathText = builder.ToString();
+            return true;
+        }
     }
 
     public bool TryGetLatestTransform(string childFrame, out TFData tfData)

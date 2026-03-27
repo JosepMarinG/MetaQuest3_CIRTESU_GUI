@@ -14,6 +14,10 @@ public class QuestTransformCalculator : MonoBehaviour
 
     public bool HasWorldTfReference => hasWorldTfReference;
 
+    [Header("Debug")]
+    [SerializeField] private bool verboseTfLookupLogs = false;
+    [SerializeField] private float tfLookupLogIntervalSeconds = 1f;
+
     private TF_Suscriber tfSubscriber;
     private string tfWorldFrame;
     private string tfToolFrame;
@@ -23,6 +27,7 @@ public class QuestTransformCalculator : MonoBehaviour
     private UnityEngine.Vector3 worldReferencePositionUnity;
     private UnityEngine.Quaternion worldReferenceRotationUnity;
     private bool hasWorldTfReference;
+    private float nextTfLookupLogTime;
 
     public void BeginControl(
         UnityEngine.Vector3 newAnchorPosition,
@@ -36,6 +41,7 @@ public class QuestTransformCalculator : MonoBehaviour
         tfSubscriber = subscriber;
         tfWorldFrame = worldFrame;
         tfToolFrame = toolFrame;
+        nextTfLookupLogTime = 0f;
 
         hasWorldTfReference = TryCaptureWorldReferenceFromTf();
     }
@@ -74,7 +80,8 @@ public class QuestTransformCalculator : MonoBehaviour
 
         if (hasWorldTfReference)
         {
-            targetPositionUnity = worldReferencePositionUnity + (worldReferenceRotationUnity * localDeltaPos);
+            // Keep the same convention as TF input so the first published pose matches TF exactly.
+            targetPositionUnity = worldReferencePositionUnity + localDeltaPos;
             targetRotationUnity = worldReferenceRotationUnity * deltaRotUnity;
             targetRotationUnity = UnityEngine.Quaternion.Normalize(targetRotationUnity);
             outputFrameId = worldFrameId;
@@ -84,8 +91,8 @@ public class QuestTransformCalculator : MonoBehaviour
         {
             UnityTargetPosition = targetPositionUnity,
             UnityTargetRotation = targetRotationUnity,
-            RosPosition = ConvertUnityVectorToRos(targetPositionUnity),
-            RosRotation = ConvertUnityQuaternionToRos(targetRotationUnity),
+            RosPosition = targetPositionUnity,
+            RosRotation = targetRotationUnity,
             OutputFrameId = outputFrameId,
             HasWorldReference = hasWorldTfReference
         };
@@ -108,44 +115,65 @@ public class QuestTransformCalculator : MonoBehaviour
             return false;
         }
 
+        LogTfLookup(
+            $"Solicitud TF '{tfWorldFrame}' -> '{tfToolFrame}'. IsReady={subscriber.IsReady}, Mensajes={subscriber.TotalTfMessages}, Updates={subscriber.TotalTransformUpdates}, Links={subscriber.UniqueTransformCount}.");
+
         if (!subscriber.TryGetTransform(tfWorldFrame, tfToolFrame, out TF_Suscriber.TFData tfData))
         {
+            LogTfLookup($"No se encontro TF directa '{tfWorldFrame}' -> '{tfToolFrame}'. Intentando inversa.");
+
             if (!subscriber.TryGetTransform(tfToolFrame, tfWorldFrame, out TF_Suscriber.TFData inverseTfData))
             {
                 Debug.LogWarning($"[QuestTransformCalculator] No se encontro TF ni directa ni inversa entre '{tfWorldFrame}' y '{tfToolFrame}'.");
                 return false;
             }
 
-            UnityEngine.Vector3 inversePositionUnity = ConvertRosVectorToUnity(inverseTfData.Translation);
-            UnityEngine.Quaternion inverseRotationUnity = UnityEngine.Quaternion.Normalize(ConvertRosQuaternionToUnity(inverseTfData.Rotation));
+            LogTfLookup(
+                $"TF inversa encontrada '{inverseTfData.ParentFrame}' -> '{inverseTfData.ChildFrame}': pos={FormatVector3(inverseTfData.Translation)}, rot={FormatQuaternion(inverseTfData.Rotation)}.",
+                true);
 
-            worldReferenceRotationUnity = UnityEngine.Quaternion.Inverse(inverseRotationUnity);
-            worldReferencePositionUnity = -(worldReferenceRotationUnity * inversePositionUnity);
+            worldReferenceRotationUnity = UnityEngine.Quaternion.Inverse(UnityEngine.Quaternion.Normalize(inverseTfData.Rotation));
+            worldReferencePositionUnity = -(worldReferenceRotationUnity * inverseTfData.Translation);
+
+            LogTfLookup(
+                $"Referencia mundo calculada desde inversa: pos={FormatVector3(worldReferencePositionUnity)}, rot={FormatQuaternion(worldReferenceRotationUnity)}.",
+                true);
             return true;
         }
 
-        worldReferencePositionUnity = ConvertRosVectorToUnity(tfData.Translation);
-        worldReferenceRotationUnity = UnityEngine.Quaternion.Normalize(ConvertRosQuaternionToUnity(tfData.Rotation));
+        worldReferencePositionUnity = tfData.Translation;
+        worldReferenceRotationUnity = UnityEngine.Quaternion.Normalize(tfData.Rotation);
+
+        LogTfLookup(
+            $"TF directa encontrada '{tfData.ParentFrame}' -> '{tfData.ChildFrame}': pos={FormatVector3(tfData.Translation)}, rot={FormatQuaternion(tfData.Rotation)}.",
+            true);
         return true;
     }
 
-    private UnityEngine.Vector3 ConvertUnityVectorToRos(UnityEngine.Vector3 unityVector)
+    private void LogTfLookup(string message, bool force = false)
     {
-        return new UnityEngine.Vector3(unityVector.z, -unityVector.x, unityVector.y);
+        if (!verboseTfLookupLogs)
+        {
+            return;
+        }
+
+        float interval = tfLookupLogIntervalSeconds > 0f ? tfLookupLogIntervalSeconds : 0f;
+        if (!force && interval > 0f && UnityEngine.Time.unscaledTime < nextTfLookupLogTime)
+        {
+            return;
+        }
+
+        nextTfLookupLogTime = UnityEngine.Time.unscaledTime + interval;
+        Debug.Log($"[QuestTransformCalculator] {message}");
     }
 
-    private UnityEngine.Quaternion ConvertUnityQuaternionToRos(UnityEngine.Quaternion unityQuaternion)
+    private static string FormatVector3(UnityEngine.Vector3 value)
     {
-        return new UnityEngine.Quaternion(unityQuaternion.z, -unityQuaternion.x, unityQuaternion.y, unityQuaternion.w);
+        return $"({value.x:F4}, {value.y:F4}, {value.z:F4})";
     }
 
-    private UnityEngine.Vector3 ConvertRosVectorToUnity(UnityEngine.Vector3 rosVector)
+    private static string FormatQuaternion(UnityEngine.Quaternion value)
     {
-        return new UnityEngine.Vector3(-rosVector.y, rosVector.z, rosVector.x);
-    }
-
-    private UnityEngine.Quaternion ConvertRosQuaternionToUnity(UnityEngine.Quaternion rosQuaternion)
-    {
-        return new UnityEngine.Quaternion(-rosQuaternion.y, rosQuaternion.z, rosQuaternion.x, rosQuaternion.w);
+        return $"({value.x:F4}, {value.y:F4}, {value.z:F4}, {value.w:F4})";
     }
 }
