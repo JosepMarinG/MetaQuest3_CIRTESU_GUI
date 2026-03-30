@@ -18,6 +18,9 @@ public class QuestTransformCalculator : MonoBehaviour
     [SerializeField] private bool verboseTfLookupLogs = false;
     [SerializeField] private float tfLookupLogIntervalSeconds = 1f;
 
+    [Header("XR to Tool Frame Conversion")]
+    [SerializeField] private UnityEngine.Quaternion xrToToolAxisConversion = UnityEngine.Quaternion.identity;
+
     private TF_Suscriber tfSubscriber;
     private string tfWorldFrame;
     private string tfToolFrame;
@@ -70,10 +73,11 @@ public class QuestTransformCalculator : MonoBehaviour
         }
 
         UnityEngine.Vector3 worldDeltaPos = currentPosition - anchorPosition;
-        UnityEngine.Vector3 localDeltaPos = UnityEngine.Quaternion.Inverse(anchorRotation) * worldDeltaPos;
-        // Ajuste de eje para alinear el sentido Unity -> ROS2 en posicion relativa.
-        //localDeltaPos.x = -localDeltaPos.x;
-        UnityEngine.Quaternion deltaRotUnity = UnityEngine.Quaternion.Inverse(anchorRotation) * currentRotation;
+        UnityEngine.Vector3 localDeltaPosXr = UnityEngine.Quaternion.Inverse(anchorRotation) * worldDeltaPos;
+        UnityEngine.Vector3 localDeltaPos = xrToToolAxisConversion * localDeltaPosXr;
+
+        UnityEngine.Quaternion deltaRotXr = UnityEngine.Quaternion.Inverse(anchorRotation) * currentRotation;
+        UnityEngine.Quaternion deltaRotUnity = xrToToolAxisConversion * deltaRotXr * UnityEngine.Quaternion.Inverse(xrToToolAxisConversion);
         deltaRotUnity = UnityEngine.Quaternion.Normalize(deltaRotUnity);
 
         UnityEngine.Vector3 targetPositionUnity = localDeltaPos;
@@ -85,7 +89,7 @@ public class QuestTransformCalculator : MonoBehaviour
             // Keep the same convention as TF input so the first published pose matches TF exactly.
             UnityEngine.Vector3 worldDeltaFromLocal = worldReferenceRotationUnity * localDeltaPos;
             targetPositionUnity = worldReferencePositionUnity + worldDeltaFromLocal;
-            targetRotationUnity = worldReferenceRotationUnity * deltaRotUnity;
+            targetRotationUnity = worldReferenceRotationUnity * deltaRotUnity; 
             targetRotationUnity = UnityEngine.Quaternion.Normalize(targetRotationUnity);
             outputFrameId = worldFrameId;
         }
