@@ -75,9 +75,13 @@ public class QuestTransformCalculator : MonoBehaviour
         UnityEngine.Vector3 worldDeltaPos = currentPosition - anchorPosition;
         UnityEngine.Vector3 localDeltaPosXr = UnityEngine.Quaternion.Inverse(anchorRotation) * worldDeltaPos;
         UnityEngine.Vector3 localDeltaPos = xrToToolAxisConversion * localDeltaPosXr;
+        localDeltaPos.x = -localDeltaPos.x;
+        localDeltaPos.y = -localDeltaPos.y;
+        localDeltaPos.z = -localDeltaPos.z;
 
         UnityEngine.Quaternion deltaRotXr = UnityEngine.Quaternion.Inverse(anchorRotation) * currentRotation;
         UnityEngine.Quaternion deltaRotUnity = xrToToolAxisConversion * deltaRotXr * UnityEngine.Quaternion.Inverse(xrToToolAxisConversion);
+        //deltaRotUnity.z = -deltaRotUnity.z;
         deltaRotUnity = UnityEngine.Quaternion.Normalize(deltaRotUnity);
 
         UnityEngine.Vector3 targetPositionUnity = localDeltaPos;
