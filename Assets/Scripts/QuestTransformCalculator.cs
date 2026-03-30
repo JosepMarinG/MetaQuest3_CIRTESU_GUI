@@ -71,6 +71,8 @@ public class QuestTransformCalculator : MonoBehaviour
 
         UnityEngine.Vector3 worldDeltaPos = currentPosition - anchorPosition;
         UnityEngine.Vector3 localDeltaPos = UnityEngine.Quaternion.Inverse(anchorRotation) * worldDeltaPos;
+        // Ajuste de eje para alinear el sentido Unity -> ROS2 en posicion relativa.
+        //localDeltaPos.x = -localDeltaPos.x;
         UnityEngine.Quaternion deltaRotUnity = UnityEngine.Quaternion.Inverse(anchorRotation) * currentRotation;
         deltaRotUnity = UnityEngine.Quaternion.Normalize(deltaRotUnity);
 
@@ -81,7 +83,8 @@ public class QuestTransformCalculator : MonoBehaviour
         if (hasWorldTfReference)
         {
             // Keep the same convention as TF input so the first published pose matches TF exactly.
-            targetPositionUnity = worldReferencePositionUnity + localDeltaPos;
+            UnityEngine.Vector3 worldDeltaFromLocal = worldReferenceRotationUnity * localDeltaPos;
+            targetPositionUnity = worldReferencePositionUnity + worldDeltaFromLocal;
             targetRotationUnity = worldReferenceRotationUnity * deltaRotUnity;
             targetRotationUnity = UnityEngine.Quaternion.Normalize(targetRotationUnity);
             outputFrameId = worldFrameId;

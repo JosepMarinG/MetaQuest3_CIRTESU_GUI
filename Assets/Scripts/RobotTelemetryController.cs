@@ -8,17 +8,25 @@ public class RobotTelemetryController : MonoBehaviour
     private ROS2UnityComponent ros2Unity;
     private ROS2Node ros2Node;
     private ISubscription<sensor_msgs.msg.NavSatFix> gpsSub;
+    private ISubscription<geometry_msgs.msg.Quaternion> orientationSub;
 
     [Header("Configuración")]
     public string gpsTopic = "/catamaran/mavlink/gps";
+    public string orientationTopic = "/mavlink/orientation";
     public CesiumGlobeAnchor globeAnchor;
     public float updateRate = 6f; // Hz
     
     private double lat = 39.96837693;
     private double lon = 0.01961313;
     private double alt = 48.5374;
+    private float qx = 0f;
+    private float qy = 0f;
+    private float qz = 0f;
+    private float qw = 1f;
     private bool newDataReceived = false;
+    private bool newOrientationReceived = false;
     private int messageCount = 0;
+    private int orientationMessageCount = 0;
     private float updateTimer = 0f;
 
     void Start()
@@ -52,7 +60,19 @@ public class RobotTelemetryController : MonoBehaviour
                 Debug.Log($"[RobotTelemetry][ROS2 Callback #{messageCount}] Recibido → Lat:{lat:F6}, Lon:{lon:F6}, Alt:{alt:F1}");
             }, qos);
 
+        orientationSub = ros2Node.CreateSubscription<geometry_msgs.msg.Quaternion>(
+            orientationTopic, msg => {
+                qx = (float)msg.X;
+                qy = (float)msg.Y;
+                qz = (float)msg.Z;
+                qw = (float)msg.W;
+                newOrientationReceived = true;
+                orientationMessageCount++;
+                Debug.Log($"[RobotTelemetry][Orientation #{orientationMessageCount}] Recibido → x:{qx:F4}, y:{qy:F4}, z:{qz:F4}, w:{qw:F4}");
+            }, qos);
+
         Debug.Log($"[RobotTelemetry] Suscrito a {gpsTopic}");
+        Debug.Log($"[RobotTelemetry] Suscrito a {orientationTopic}");
         Debug.Log($"[RobotTelemetry] GlobeAnchor inicial: {globeAnchor.longitudeLatitudeHeight}");
     }
 
@@ -73,6 +93,14 @@ public class RobotTelemetryController : MonoBehaviour
                 
                 newDataReceived = false;
             }
+
+            if (newOrientationReceived)
+            {
+                transform.rotation = new Quaternion(qx, qy, qz, qw);
+                Debug.Log($"[Update] Rotación aplicada → x:{qx:F4}, y:{qy:F4}, z:{qz:F4}, w:{qw:F4}");
+                newOrientationReceived = false;
+            }
+
             updateTimer = 0f;
         }
     }
