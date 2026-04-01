@@ -1,6 +1,7 @@
 using UnityEngine;
 using ROS2;
 using sensor_msgs.msg;
+using System.Collections.Generic;
 
 public class JointStateSubscriber : MonoBehaviour
 {
@@ -11,8 +12,12 @@ public class JointStateSubscriber : MonoBehaviour
     public string robotNamespace = "girona500_UJI";
     
     [Header("Mapeo de Joints")]
-    [SerializeField] private ArticulationBody[] jointArticulations = new ArticulationBody[0];
+    [SerializeField] private Transform[] jointTransforms = new Transform[0];
     [SerializeField] private string[] jointNames = new string[0];
+
+    [Header("Diagnóstico")]
+    [SerializeField] private bool enableJointDiagnostics = false;
+    [SerializeField, Min(0.1f)] private float diagnosticLogIntervalSeconds = 0.5f;
     
     private ROS2UnityComponent ros2Unity;
     private ROS2Node ros2Node;
@@ -21,6 +26,11 @@ public class JointStateSubscriber : MonoBehaviour
     private bool initialized = false;
     private bool loggedMissingRos2Unity = false;
     private bool loggedRos2NotReady = false;
+
+    private readonly object pendingLock = new object();
+    private readonly Dictionary<int, float> pendingTargetsDeg = new Dictionary<int, float>();
+    private readonly Dictionary<int, float> lastAppliedTargetsDeg = new Dictionary<int, float>();
+    private float nextDiagnosticLogTime = 0f;
 
     void Start()
     {
@@ -38,36 +48,80 @@ public class JointStateSubscriber : MonoBehaviour
 
     void Update()
     {
-        if (initialized)
-            return;
-
-        if (ros2Unity == null)
+        if (!initialized)
         {
-            if (!loggedMissingRos2Unity)
+            if (ros2Unity == null)
             {
-                Debug.LogError("[JointStateSubscriber] ros2Unity sigue siendo null.");
-                loggedMissingRos2Unity = true;
+                if (!loggedMissingRos2Unity)
+                {
+                    Debug.LogError("[JointStateSubscriber] ros2Unity sigue siendo null.");
+                    loggedMissingRos2Unity = true;
+                }
+                return;
             }
-            return;
-        }
 
-        if (!ros2Unity.Ok())
-        {
-            if (!loggedRos2NotReady)
+            if (!ros2Unity.Ok())
             {
-                Debug.LogWarning("[JointStateSubscriber] ROS2 no está listo. Esperando...");
-                loggedRos2NotReady = true;
+                if (!loggedRos2NotReady)
+                {
+                    Debug.LogWarning("[JointStateSubscriber] ROS2 no está listo. Esperando...");
+                    loggedRos2NotReady = true;
+                }
+                return;
             }
+
+            if (loggedRos2NotReady)
+            {
+                Debug.Log("[JointStateSubscriber] ROS2 está listo. Inicializando...");
+                loggedRos2NotReady = false;
+            }
+
+            InitializeROS2();
             return;
         }
 
-        if (loggedRos2NotReady)
+        Dictionary<int, float> targetsSnapshot;
+        lock (pendingLock)
         {
-            Debug.Log("[JointStateSubscriber] ROS2 está listo. Inicializando...");
-            loggedRos2NotReady = false;
+            if (pendingTargetsDeg.Count == 0)
+            {
+                if (enableJointDiagnostics && Time.time >= nextDiagnosticLogTime)
+                {
+                    nextDiagnosticLogTime = Time.time + diagnosticLogIntervalSeconds;
+                    LogJointDiagnostics();
+                }
+                return;
+            }
+
+            targetsSnapshot = new Dictionary<int, float>(pendingTargetsDeg);
+            pendingTargetsDeg.Clear();
         }
 
-        InitializeROS2();
+        foreach (var kvp in targetsSnapshot)
+        {
+            int jointIndex = kvp.Key;
+            float targetDeg = kvp.Value;
+
+            if (jointIndex < 0 || jointIndex >= jointTransforms.Length)
+                continue;
+
+            Transform jointTransform = jointTransforms[jointIndex];
+            if (jointTransform == null)
+                continue;
+
+            ApplyJointRotationPreset(jointIndex, jointTransform, targetDeg);
+
+            if (enableJointDiagnostics)
+            {
+                lastAppliedTargetsDeg[jointIndex] = targetDeg;
+            }
+        }
+
+        if (enableJointDiagnostics && Time.time >= nextDiagnosticLogTime)
+        {
+            nextDiagnosticLogTime = Time.time + diagnosticLogIntervalSeconds;
+            LogJointDiagnostics();
+        }
     }
 
     private void InitializeROS2()
@@ -108,8 +162,12 @@ public class JointStateSubscriber : MonoBehaviour
             return;
         }
 
+        int count = Mathf.Min(message.Name.Length, message.Position.Length);
+        if (count == 0)
+            return;
+
         // Procesar cada joint del mensaje
-        for (int i = 0; i < message.Name.Length; i++)
+        for (int i = 0; i < count; i++)
         {
             string jointName = message.Name[i];
             double position = message.Position[i];
@@ -123,34 +181,31 @@ public class JointStateSubscriber : MonoBehaviour
                 continue;
             }
 
-            if (jointIndex >= 0 && jointIndex < jointArticulations.Length)
+            if (jointIndex >= 0 && jointIndex < jointTransforms.Length)
             {
-                ArticulationBody articulationBody = jointArticulations[jointIndex];
-                if (articulationBody != null)
+                Transform jointTransform = jointTransforms[jointIndex];
+                if (jointTransform != null)
                 {
-                    UpdateJointPosition(articulationBody, (float)position, jointName);
+                    UpdateJointPosition((float)position, jointName, jointIndex);
                 }
             }
         }
     }
 
-    private void UpdateJointPosition(ArticulationBody body, float position, string jointName)
+    private void UpdateJointPosition(float position, string jointName, int jointIndex)
     {
-        if (body == null)
-            return;
-
         try
         {
             // Convertir de radianes a grados si es necesario
             float positionDegrees = position * Mathf.Rad2Deg;
 
-            // Actualizar la posición del joint
-            var drive = body.xDrive;
-            drive.target = position; // Usar radianes directamente
-            body.xDrive = drive;
+            lock (pendingLock)
+            {
+                pendingTargetsDeg[jointIndex] = positionDegrees;
+            }
 
             // Log para depuración (comentar si causa problemas de rendimiento)
-            // Debug.Log($"[JointStateSubscriber] Actualizado '{jointName}': {position:F3} rad ({positionDegrees:F1}°)");
+            Debug.Log($"[JointStateSubscriber] Actualizado '{jointName}': {position:F3} rad ({positionDegrees:F1}°)");
         }
         catch (System.Exception ex)
         {
@@ -158,35 +213,110 @@ public class JointStateSubscriber : MonoBehaviour
         }
     }
 
-    // Método público para asignar manualmente los joints (útil si lo llamas desde el inspector)
-    public void SetupJoints(ArticulationBody[] articles, string[] names)
+    private void ApplyJointRotationPreset(int jointIndex, Transform jointTransform, float positionDegrees)
     {
-        if (articles.Length != names.Length)
+        switch (jointIndex)
         {
-            Debug.LogError("[JointStateSubscriber] El número de ArticulationBody no coincide con el de nombres.");
+            case 1:
+            {
+                jointTransform.localEulerAngles = new Vector3(
+                    -70f + positionDegrees * 100f,
+                    180f,
+                    0f
+                );
+
+                if (jointTransforms.Length > 0 && jointTransforms[0] != null)
+                {
+                    jointTransforms[0].localEulerAngles = new Vector3(
+                        70f - positionDegrees * 100f,
+                        180f,
+                        0f
+                    );
+
+                    if (enableJointDiagnostics)
+                    {
+                        lastAppliedTargetsDeg[0] = 70f - positionDegrees * 100f;
+                    }
+                }
+                break;
+            }
+            case 2:
+                jointTransform.localEulerAngles = new Vector3(0f, -positionDegrees, 180f);
+                break;
+            case 3:
+                jointTransform.localEulerAngles = new Vector3(-positionDegrees, 0f, -90f);
+                break;
+            case 4:
+                jointTransform.localEulerAngles = new Vector3(0f, -positionDegrees, 0f);
+                break;
+            case 5:
+                jointTransform.localEulerAngles = new Vector3(-positionDegrees, 180f, 90f);
+                break;
+            case 6:
+                jointTransform.localEulerAngles = new Vector3(positionDegrees, 0f, 90f);
+                break;
+            case 7:
+                jointTransform.localEulerAngles = new Vector3(90f + positionDegrees, 0f, -90f);
+                break;
+            default:
+                jointTransform.localEulerAngles = new Vector3(positionDegrees, 0f, 0f);
+                break;
+        }
+    }
+
+    private void LogJointDiagnostics()
+    {
+        foreach (var kvp in lastAppliedTargetsDeg)
+        {
+            int jointIndex = kvp.Key;
+            float targetDeg = kvp.Value;
+
+            if (jointIndex < 0 || jointIndex >= jointTransforms.Length)
+                continue;
+
+            Transform jointTransform = jointTransforms[jointIndex];
+            if (jointTransform == null)
+                continue;
+
+            Vector3 currentEuler = jointTransform.localEulerAngles;
+            string jointLabel = jointIndex < jointNames.Length ? jointNames[jointIndex] : jointTransform.name;
+
+            Debug.Log($"[JointStateSubscriber][Diag] '{jointLabel}' target={targetDeg:F2} deg | euler=({currentEuler.x:F2}, {currentEuler.y:F2}, {currentEuler.z:F2})");
+        }
+    }
+
+    // Método público para asignar manualmente los joints (útil si lo llamas desde el inspector)
+    public void SetupJoints(Transform[] joints, string[] names)
+    {
+        if (joints.Length != names.Length)
+        {
+            Debug.LogError("[JointStateSubscriber] El número de Transform no coincide con el de nombres.");
             return;
         }
 
-        jointArticulations = articles;
+        jointTransforms = joints;
         jointNames = names;
-        Debug.Log($"[JointStateSubscriber] {jointArticulations.Length} joints configurados.");
+        Debug.Log($"[JointStateSubscriber] {jointTransforms.Length} joints configurados.");
     }
 
-    // Método helper para encontrar automáticamente los joints
+    // Método helper para encontrar automáticamente los transforms
     public void AutodetectJoints()
     {
-        Debug.Log("[JointStateSubscriber] Buscando ArticulationBody automáticamente...");
+        Debug.Log("[JointStateSubscriber] Buscando transforms automáticamente...");
         
-        var allArticulations = GetComponentsInChildren<ArticulationBody>();
-        System.Collections.Generic.List<ArticulationBody> bodies = new();
+        var allTransforms = GetComponentsInChildren<Transform>();
+        System.Collections.Generic.List<Transform> bodies = new();
         System.Collections.Generic.List<string> names = new();
 
-        foreach (var article in allArticulations)
+        foreach (var t in allTransforms)
         {
-            bodies.Add(article);
+            if (t == transform)
+                continue;
+
+            bodies.Add(t);
             // El nombre se puede extraer del GameObject
-            names.Add(article.gameObject.name);
-            Debug.Log($"[JointStateSubscriber] Encontrado: {article.gameObject.name}");
+            names.Add(t.gameObject.name);
+            Debug.Log($"[JointStateSubscriber] Encontrado: {t.gameObject.name}");
         }
 
         SetupJoints(bodies.ToArray(), names.ToArray());
