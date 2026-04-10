@@ -9,6 +9,8 @@ public class MapTfRobotFollower : MonoBehaviour
     [Header("Referencias")]
     public TF_Suscriber tfSubscriber;
     public ToggleIconFeedback iconFeedback;
+    [Tooltip("Transform de referencia que representa el frame ROS world_ned ya corregido al sistema de ejes de Unity.")]
+    public Transform worldNedReference;
 
     [Header("Frames TF")]
     public string worldFrame = "world_ned";
@@ -212,15 +214,26 @@ public class MapTfRobotFollower : MonoBehaviour
             return;
         }
 
-        if (applyAsLocalPose)
+        Transform reference = worldNedReference;
+        bool hasReference = reference != null;
+
+        Vector3 worldPosition = hasReference
+            ? reference.TransformPoint(tfData.Translation)
+            : tfData.Translation;
+
+        Quaternion worldRotation = hasReference
+            ? Quaternion.Normalize(reference.rotation * tfData.Rotation)
+            : Quaternion.Normalize(tfData.Rotation);
+
+        if (applyAsLocalPose && target.parent != null)
         {
-            target.localPosition = tfData.Translation;
-            target.localRotation = tfData.Rotation;
+            Transform parent = target.parent;
+            target.localPosition = parent.InverseTransformPoint(worldPosition);
+            target.localRotation = Quaternion.Normalize(Quaternion.Inverse(parent.rotation) * worldRotation);
         }
         else
         {
-            target.position = tfData.Translation;
-            target.rotation = tfData.Rotation;
+            target.SetPositionAndRotation(worldPosition, worldRotation);
         }
     }
 

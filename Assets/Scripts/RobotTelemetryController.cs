@@ -16,6 +16,8 @@ public class RobotTelemetryController : MonoBehaviour
     public CesiumGlobeAnchor globeAnchor;
     public Transform orientationTarget;
     public bool applyOrientationAsLocalRotation = true;
+    public bool invertYaw = true;
+    public float yawOffsetDegrees = 0f;
     public float updateRate = 6f; // Hz
     
     private double lat = 39.96837693;
@@ -103,7 +105,14 @@ public class RobotTelemetryController : MonoBehaviour
 
             if (newOrientationReceived && orientationTarget != null)
             {
-                Quaternion targetRotation = Quaternion.Normalize(new Quaternion(qx, qy, qz, qw));
+                float yawDegrees = ExtractYawDegrees(qx, qy, qz, qw);
+                if (invertYaw)
+                {
+                    yawDegrees = -yawDegrees;
+                }
+
+                yawDegrees += yawOffsetDegrees;
+                Quaternion targetRotation = Quaternion.Euler(0f, 0f, yawDegrees);
 
                 if (applyOrientationAsLocalRotation)
                 {
@@ -119,5 +128,13 @@ public class RobotTelemetryController : MonoBehaviour
 
             updateTimer = 0f;
         }
+    }
+
+    private static float ExtractYawDegrees(float x, float y, float z, float w)
+    {
+        float sinyCosp = 2f * (w * z + x * y);
+        float cosyCosp = 1f - 2f * (y * y + z * z);
+        float yawRadians = Mathf.Atan2(sinyCosp, cosyCosp);
+        return yawRadians * Mathf.Rad2Deg;
     }
 }
