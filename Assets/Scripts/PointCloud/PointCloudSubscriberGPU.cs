@@ -16,11 +16,15 @@ public class PointCloudSubscriberGPU : MonoBehaviour
     [SerializeField] private Shader pointShader;
     [SerializeField, Min(1)] private int maxBufferPoints = 500000;
     [SerializeField, Min(1)] private int displayPointLimit = 120000;
-    [SerializeField, Min(3)] private int billboardSides = 4;
-    [SerializeField, Min(0.001f)] private float pointSize = 0.03f;
+    [SerializeField, Min(0.001f)] private float pointSize = 0.05f;
     [SerializeField, Min(0.001f)] private float cloudScale = 1f;
     [SerializeField] private bool centerCloudOnBounds = false;
     [SerializeField] private bool displayAllPoints = true;
+    [SerializeField] private bool applyRosToUnityTransform = false;
+    [SerializeField] private bool forceSolidWhiteColor = true;
+    [SerializeField] private Transform anchorTransform;
+    [SerializeField] private Vector3 localPositionOffset = Vector3.zero;
+    [SerializeField] private Vector3 localEulerOffset = Vector3.zero;
     [SerializeField] private Color intensityMin = Color.black;
     [SerializeField] private Color intensityMax = Color.white;
     [SerializeField] private bool visualizationEnabled = true;
@@ -133,12 +137,19 @@ public class PointCloudSubscriberGPU : MonoBehaviour
             return;
         }
 
-        Matrix4x4 localToWorldMatrix = transform.localToWorldMatrix;
-        Matrix4x4 rotationMatrix = Matrix4x4.Rotate(Quaternion.Euler(-90f, 90f, 0f));
-        Matrix4x4 inversionMatrix = Matrix4x4.Scale(new Vector3(-1f, 1f, 1f));
+        Transform anchor = anchorTransform != null ? anchorTransform : transform;
+        Matrix4x4 anchorMatrix = anchor.localToWorldMatrix;
+        Matrix4x4 localOffsetMatrix = Matrix4x4.TRS(localPositionOffset, Quaternion.Euler(localEulerOffset), Vector3.one);
         Matrix4x4 cloudScaleMatrix = Matrix4x4.Scale(new Vector3(cloudScale, cloudScale, cloudScale));
         Matrix4x4 centerTranslation = centerCloudOnBounds ? Matrix4x4.Translate(-latestCloudCenter) : Matrix4x4.identity;
-        Matrix4x4 transformationMatrix = localToWorldMatrix * rotationMatrix * inversionMatrix * cloudScaleMatrix * centerTranslation;
+        Matrix4x4 transformationMatrix = anchorMatrix * localOffsetMatrix * cloudScaleMatrix * centerTranslation;
+
+        if (applyRosToUnityTransform)
+        {
+            Matrix4x4 rotationMatrix = Matrix4x4.Rotate(Quaternion.Euler(-90f, 90f, 0f));
+            Matrix4x4 inversionMatrix = Matrix4x4.Scale(new Vector3(-1f, 1f, 1f));
+            transformationMatrix = anchorMatrix * localOffsetMatrix * rotationMatrix * inversionMatrix * cloudScaleMatrix * centerTranslation;
+        }
 
         renderParams.matProps.SetMatrix("_ObjectToWorld", transformationMatrix);
 
@@ -153,7 +164,7 @@ public class PointCloudSubscriberGPU : MonoBehaviour
         if (!loggedRenderState && enableBasicLogs)
         {
             loggedRenderState = true;
-            Debug.Log($"[PointCloudSubscriberGPU] Render activo. points={currentPointCount}, pointSize={pointSize}, cloudScale={cloudScale}, centerCloudOnBounds={centerCloudOnBounds}, displayAllPoints={displayAllPoints}, scale={transform.lossyScale}, position={transform.position}, material={(pointMaterial != null ? pointMaterial.name : "null")}, shader={(pointMaterial != null && pointMaterial.shader != null ? pointMaterial.shader.name : "null")}");
+            Debug.Log($"[PointCloudSubscriberGPU] Render activo. points={currentPointCount}, pointSize={pointSize}, cloudScale={cloudScale}, centerCloudOnBounds={centerCloudOnBounds}, displayAllPoints={displayAllPoints}, anchor={(anchorTransform != null ? anchorTransform.name : transform.name)}, position={anchor.position}, material={(pointMaterial != null ? pointMaterial.name : "null")}, shader={(pointMaterial != null && pointMaterial.shader != null ? pointMaterial.shader.name : "null")}");
         }
     }
 
@@ -267,7 +278,7 @@ public class PointCloudSubscriberGPU : MonoBehaviour
     {
         if (enableBasicLogs)
         {
-            Debug.Log($"[PointCloudSubscriberGPU] Creando recursos GPU. maxBufferPoints={maxBufferPoints}, displayPointLimit={displayPointLimit}, displayAllPoints={displayAllPoints}, billboardSides={billboardSides}, pointSize={pointSize}, materialShader={(pointMaterial != null && pointMaterial.shader != null ? pointMaterial.shader.name : "null")}");
+            Debug.Log($"[PointCloudSubscriberGPU] Creando recursos GPU. maxBufferPoints={maxBufferPoints}, displayPointLimit={displayPointLimit}, displayAllPoints={displayAllPoints}, pointSize={pointSize}, materialShader={(pointMaterial != null && pointMaterial.shader != null ? pointMaterial.shader.name : "null")}");
         }
 
         if (pointMaterial == null)
@@ -276,7 +287,7 @@ public class PointCloudSubscriberGPU : MonoBehaviour
             return false;
         }
 
-        pointMesh = MakePolygonMesh(Mathf.Max(3, billboardSides));
+        pointMesh = MakeQuadMesh();
 
         meshTriangles = new GraphicsBuffer(GraphicsBuffer.Target.Structured, pointMesh.triangles.Length, sizeof(int));
         meshTriangles.SetData(pointMesh.triangles);
@@ -294,15 +305,17 @@ public class PointCloudSubscriberGPU : MonoBehaviour
 
         pointMaterial.DisableKeyword("COLOR_RGB");
         pointMaterial.DisableKeyword("COLOR_Z");
-        pointMaterial.EnableKeyword("COLOR_INTENSITY");
+        pointMaterial.DisableKeyword("COLOR_INTENSITY");
 
         baseVertexIndex = (uint)pointMesh.GetBaseVertex(0);
         renderParams.matProps.SetBuffer("_PointData", pointData);
         renderParams.matProps.SetBuffer("_Positions", meshVertices);
         renderParams.matProps.SetInt("_BaseVertexIndex", (int)baseVertexIndex);
         renderParams.matProps.SetFloat("_PointSize", pointSize);
-        renderParams.matProps.SetColor("_ColorMin", intensityMin);
-        renderParams.matProps.SetColor("_ColorMax", intensityMax);
+        Color renderColorMin = forceSolidWhiteColor ? Color.white : intensityMin;
+        Color renderColorMax = forceSolidWhiteColor ? Color.white : intensityMax;
+        renderParams.matProps.SetColor("_ColorMin", renderColorMin);
+        renderParams.matProps.SetColor("_ColorMax", renderColorMax);
         renderParams.matProps.SetMatrix("_ObjectToWorld", Matrix4x4.identity);
 
         renderResourcesReady = true;
@@ -406,10 +419,11 @@ public class PointCloudSubscriberGPU : MonoBehaviour
         {
             Vector3 center = (minPoint + maxPoint) * 0.5f;
             Vector3 size = maxPoint - minPoint;
-            latestCloudCenter = center;
             Debug.Log($"[PointCloudSubscriberGPU] Bounds cloud: min={minPoint}, max={maxPoint}, center={center}, size={size}");
             nextBoundsLogTime = Time.time + 5f;
         }
+
+        latestCloudCenter = (minPoint + maxPoint) * 0.5f;
 
         if (verboseLogs)
         {
@@ -522,24 +536,23 @@ public class PointCloudSubscriberGPU : MonoBehaviour
         return -1;
     }
 
-    private static Mesh MakePolygonMesh(int sides)
+    private static Mesh MakeQuadMesh()
     {
         Mesh mesh = new Mesh();
-        Vector3[] vertices = new Vector3[sides];
-        int[] triangles = new int[(sides - 2) * 3];
+        Vector3[] vertices = new Vector3[4];
+        int[] triangles = new int[6];
 
-        for (int i = 0; i < sides; i++)
-        {
-            float angle = 2f * Mathf.PI * i / sides;
-            vertices[i] = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f);
-        }
+        vertices[0] = new Vector3(-1f, -1f, 0f);
+        vertices[1] = new Vector3(1f, -1f, 0f);
+        vertices[2] = new Vector3(-1f, 1f, 0f);
+        vertices[3] = new Vector3(1f, 1f, 0f);
 
-        for (int i = 0; i < sides - 2; i++)
-        {
-            triangles[i * 3 + 0] = 0;
-            triangles[i * 3 + 1] = i + 1;
-            triangles[i * 3 + 2] = i + 2;
-        }
+        triangles[0] = 0;
+        triangles[1] = 2;
+        triangles[2] = 1;
+        triangles[3] = 1;
+        triangles[4] = 2;
+        triangles[5] = 3;
 
         mesh.vertices = vertices;
         mesh.triangles = triangles;
@@ -607,11 +620,25 @@ public class PointCloudSubscriberGPU : MonoBehaviour
             displayPointLimit = maxBufferPoints;
         }
 
+        if (anchorTransform == null)
+        {
+            anchorTransform = transform;
+        }
+
         if (renderParams.matProps != null)
         {
             renderParams.matProps.SetFloat("_PointSize", pointSize);
-            renderParams.matProps.SetColor("_ColorMin", intensityMin);
-            renderParams.matProps.SetColor("_ColorMax", intensityMax);
+            Color renderColorMin = forceSolidWhiteColor ? Color.white : intensityMin;
+            Color renderColorMax = forceSolidWhiteColor ? Color.white : intensityMax;
+            renderParams.matProps.SetColor("_ColorMin", renderColorMin);
+            renderParams.matProps.SetColor("_ColorMax", renderColorMax);
+
+            if (pointMaterial != null)
+            {
+                pointMaterial.DisableKeyword("COLOR_RGB");
+                pointMaterial.DisableKeyword("COLOR_Z");
+                pointMaterial.DisableKeyword("COLOR_INTENSITY");
+            }
         }
     }
 

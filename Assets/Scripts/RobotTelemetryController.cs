@@ -14,6 +14,8 @@ public class RobotTelemetryController : MonoBehaviour
     public string gpsTopic = "/catamaran/mavlink/gps";
     public string orientationTopic = "/mavlink/orientation";
     public CesiumGlobeAnchor globeAnchor;
+    public Transform orientationTarget;
+    public bool applyOrientationAsLocalRotation = true;
     public float updateRate = 6f; // Hz
     
     private double lat = 39.96837693;
@@ -33,6 +35,10 @@ public class RobotTelemetryController : MonoBehaviour
     {
         ros2Unity = GetComponentInParent<ROS2UnityComponent>();
         if (globeAnchor == null) globeAnchor = GetComponent<CesiumGlobeAnchor>();
+        if (orientationTarget == null)
+        {
+            orientationTarget = globeAnchor != null ? globeAnchor.transform : transform;
+        }
 
         if (ros2Unity == null || !ros2Unity.Ok())
         {
@@ -73,7 +79,8 @@ public class RobotTelemetryController : MonoBehaviour
 
         Debug.Log($"[RobotTelemetry] Suscrito a {gpsTopic}");
         Debug.Log($"[RobotTelemetry] Suscrito a {orientationTopic}");
-        Debug.Log($"[RobotTelemetry] GlobeAnchor inicial: {globeAnchor.longitudeLatitudeHeight}");
+        Debug.Log($"[RobotTelemetry] GlobeAnchor inicial: {(globeAnchor != null ? globeAnchor.longitudeLatitudeHeight.ToString() : "null")}");
+        Debug.Log($"[RobotTelemetry] OrientationTarget: {(orientationTarget != null ? orientationTarget.name : "null")}, applyLocalRotation={applyOrientationAsLocalRotation}");
     }
 
     private void Update()
@@ -94,9 +101,18 @@ public class RobotTelemetryController : MonoBehaviour
                 newDataReceived = false;
             }
 
-            if (newOrientationReceived)
+            if (newOrientationReceived && orientationTarget != null)
             {
-                transform.rotation = new Quaternion(qx, qy, qz, qw);
+                Quaternion targetRotation = Quaternion.Normalize(new Quaternion(qx, qy, qz, qw));
+
+                if (applyOrientationAsLocalRotation)
+                {
+                    orientationTarget.localRotation = targetRotation;
+                }
+                else
+                {
+                    orientationTarget.rotation = targetRotation;
+                }
                 Debug.Log($"[Update] Rotación aplicada → x:{qx:F4}, y:{qy:F4}, z:{qz:F4}, w:{qw:F4}");
                 newOrientationReceived = false;
             }
