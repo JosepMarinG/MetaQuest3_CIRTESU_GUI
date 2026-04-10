@@ -50,6 +50,10 @@ public class QuestPositionControl : MonoBehaviour
     public ToggleIconFeedback iconFeedback;
     public TF_Suscriber tfSubscriber;
 
+    [Header("XR Tracking")]
+    [Tooltip("Transform del espacio de tracking XR. Si no se asigna, se usa el padre de la Main Camera como fallback.")]
+    public UnityEngine.Transform trackingSpace;
+
     void Awake()
     {
         if (activeInstance != null && activeInstance != this)
@@ -186,8 +190,7 @@ public class QuestPositionControl : MonoBehaviour
 
     private void StartPositionControl(UnityEngine.InputSystem.XR.XRController hand)
     {
-        anchorPosition = hand.devicePosition.ReadValue();
-        anchorRotation = hand.deviceRotation.ReadValue();
+        GetHandWorldPose(hand, out anchorPosition, out anchorRotation);
 
         EnsureTransformCalculator();
         transformCalculator.BeginControl(anchorPosition, anchorRotation, tfSubscriber, tfWorldFrame, tfToolFrame);
@@ -224,8 +227,7 @@ public class QuestPositionControl : MonoBehaviour
 
         EnsureTransformCalculator();
 
-        UnityEngine.Vector3 currentPosition = hand.devicePosition.ReadValue();
-        UnityEngine.Quaternion currentRotation = hand.deviceRotation.ReadValue();
+        GetHandWorldPose(hand, out UnityEngine.Vector3 currentPosition, out UnityEngine.Quaternion currentRotation);
 
         if (!transformCalculator.TryComputeTargetPose(
             currentPosition,
@@ -274,8 +276,9 @@ public class QuestPositionControl : MonoBehaviour
     {
         if (activeGripperVisual == null) return;
 
-        activeGripperVisual.transform.position = hand.devicePosition.ReadValue();
-        activeGripperVisual.transform.rotation = hand.deviceRotation.ReadValue();
+        GetHandWorldPose(hand, out UnityEngine.Vector3 worldPosition, out UnityEngine.Quaternion worldRotation);
+        activeGripperVisual.transform.position = worldPosition;
+        activeGripperVisual.transform.rotation = worldRotation;
 
         if (!activeGripperVisual.activeSelf)
         {
@@ -394,7 +397,31 @@ public class QuestPositionControl : MonoBehaviour
         if (controlLine == null) return;
 
         controlLine.SetPosition(0, anchorPosition);
-        controlLine.SetPosition(1, hand.devicePosition.ReadValue());
+        GetHandWorldPose(hand, out UnityEngine.Vector3 worldPosition, out _);
+        controlLine.SetPosition(1, worldPosition);
+    }
+
+    private void GetHandWorldPose(UnityEngine.InputSystem.XR.XRController hand, out UnityEngine.Vector3 worldPosition, out UnityEngine.Quaternion worldRotation)
+    {
+        UnityEngine.Vector3 trackingPosition = hand != null ? hand.devicePosition.ReadValue() : UnityEngine.Vector3.zero;
+        UnityEngine.Quaternion trackingRotation = hand != null ? hand.deviceRotation.ReadValue() : UnityEngine.Quaternion.identity;
+
+        UnityEngine.Transform reference = trackingSpace;
+        if (reference == null)
+        {
+            UnityEngine.Transform mainCamera = Camera.main != null ? Camera.main.transform : null;
+            reference = mainCamera != null ? mainCamera.parent : null;
+        }
+
+        if (reference == null)
+        {
+            worldPosition = trackingPosition;
+            worldRotation = trackingRotation;
+            return;
+        }
+
+        worldPosition = reference.TransformPoint(trackingPosition);
+        worldRotation = reference.rotation * trackingRotation;
     }
 
     private void SetPublishedValuesText(string text)

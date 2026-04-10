@@ -220,17 +220,17 @@ public class JointStateSubscriber : MonoBehaviour
             case 1:
             {
                 jointTransform.localEulerAngles = new Vector3(
-                    -70f + positionDegrees * 100f,
-                    180f,
-                    0f
+                    -180f - positionDegrees * 100f,
+                    -270f,
+                    -90f
                 );
 
                 if (jointTransforms.Length > 0 && jointTransforms[0] != null)
                 {
                     jointTransforms[0].localEulerAngles = new Vector3(
-                        70f - positionDegrees * 100f,
-                        180f,
-                        0f
+                        positionDegrees * 100f,
+                        -90f,
+                        -270f
                     );
 
                     if (enableJointDiagnostics)

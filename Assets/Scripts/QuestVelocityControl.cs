@@ -167,7 +167,7 @@ public class QuestVelocityControl : MonoBehaviour
 
         UnityEngine.Vector3 delta = hand.devicePosition.ReadValue() - anchorPosition;
         UnityEngine.Vector3 localDeltaPosXr = UnityEngine.Quaternion.Inverse(anchorRotation) * delta;
-        if (delta.magnitude < deadZone) delta = UnityEngine.Vector3.zero;
+        if (localDeltaPosXr.magnitude < deadZone) localDeltaPosXr = UnityEngine.Vector3.zero;
 
         geometry_msgs.msg.TwistStamped msg = new geometry_msgs.msg.TwistStamped();
         msg.Header.Frame_id = frameId;
