@@ -47,10 +47,13 @@ public class MapTfRobotFollower : MonoBehaviour
     [Header("Debug")]
     public bool hideAxisWhenTfMissing = false;
     public bool logMissingTf = false;
+    public bool logRotationConversion = false;
+    [Min(0f)] public float rotationLogIntervalSeconds = 0.5f;
 
     private float nextUpdateTime;
     private bool loggedMissingSubscriber;
     private readonly HashSet<int> warnedCameraAncestorTargets = new HashSet<int>();
+    private readonly Dictionary<int, float> nextRotationLogByTarget = new Dictionary<int, float>();
 
     private void Start()
     {
@@ -214,27 +217,44 @@ public class MapTfRobotFollower : MonoBehaviour
             return;
         }
 
-        Transform reference = worldNedReference;
-        bool hasReference = reference != null;
+        Vector3 unityLocalPos = new Vector3(-tfData.Translation.y * 0.1f, tfData.Translation.z * 0.1f, tfData.Translation.x * 0.1f); // Escalamos
+        Quaternion unityLocalRot = ConvertRosToUnityRotation(tfData.Rotation);
 
-        Vector3 worldPosition = hasReference
-            ? reference.TransformPoint(tfData.Translation)
-            : tfData.Translation;
+        TryLogRotationConversion(target, tfData, unityLocalRot);
 
-        Quaternion worldRotation = hasReference
-            ? Quaternion.Normalize(reference.rotation * tfData.Rotation)
-            : Quaternion.Normalize(tfData.Rotation);
+        // Si el padre es la referencia, esto es equivalente a lo que tenías antes
+        // pero mucho más frágil si cambias algo en el Editor.
+        target.localPosition = unityLocalPos;
+        target.localRotation = unityLocalRot;
+
+        /*// ROS: +X adelante, +Y izquierda, +Z arriba
+        // Unity: +Z adelante, -X izquierda, +Y arriba
+        Vector3 unityPos = new Vector3(-tfData.Translation.y, tfData.Translation.z, tfData.Translation.x);
+        Quaternion unityRot = Quaternion.Normalize(new Quaternion(
+            -tfData.Rotation.y,
+            tfData.Rotation.z,
+            tfData.Rotation.x,
+            tfData.Rotation.w));
+
+        // Usamos la referencia corregida solo como origen y orientacion.
+        // No aplicamos su escala al desplazamiento de la TF.
+        Vector3 worldPosition = worldNedReference != null
+            ? worldNedReference.position + (worldNedReference.rotation * unityPos)
+            : unityPos;
+
+        Quaternion worldRotation = worldNedReference != null
+            ? Quaternion.Normalize(worldNedReference.rotation * unityRot)
+            : unityRot;
 
         if (applyAsLocalPose && target.parent != null)
         {
-            Transform parent = target.parent;
-            target.localPosition = parent.InverseTransformPoint(worldPosition);
-            target.localRotation = Quaternion.Normalize(Quaternion.Inverse(parent.rotation) * worldRotation);
+            target.localPosition = target.parent.InverseTransformPoint(worldPosition);
+            target.localRotation = Quaternion.Normalize(Quaternion.Inverse(target.parent.rotation) * worldRotation);
         }
         else
         {
             target.SetPositionAndRotation(worldPosition, worldRotation);
-        }
+        }*/
     }
 
     private void SetAxisVisibility(bool visible)
@@ -242,6 +262,57 @@ public class MapTfRobotFollower : MonoBehaviour
         SetTransformVisibility(baseLinkAxis, visible);
         SetTransformVisibility(endEffectorAxis, visible);
         SetTransformVisibility(goalAxis, visible);
+    }
+
+    private static Quaternion ConvertRosToUnityRotation(Quaternion rosRotation)
+    {
+        Quaternion normalizedRos = rosRotation == default ? Quaternion.identity : Quaternion.Normalize(rosRotation);
+
+        // Convertimos orientacion ROS (+X delante, +Y izquierda, +Z arriba)
+        // a ejes Unity (+Z delante, +Y arriba, +X derecha) mediante vectores base.
+        Vector3 rosForward = normalizedRos * Vector3.right;
+        Vector3 rosUp = normalizedRos * Vector3.forward;
+
+        Vector3 unityForward = RosToUnityVector(rosForward);
+        Vector3 unityUp = RosToUnityVector(rosUp);
+
+        if (unityForward.sqrMagnitude < 1e-8f || unityUp.sqrMagnitude < 1e-8f)
+        {
+            return Quaternion.identity;
+        }
+
+        return Quaternion.Normalize(Quaternion.LookRotation(unityForward.normalized, unityUp.normalized));
+    }
+
+    private static Vector3 RosToUnityVector(Vector3 rosVector)
+    {
+        return new Vector3(-rosVector.y, rosVector.z, rosVector.x);
+    }
+
+    private void TryLogRotationConversion(Transform target, TF_Suscriber.TFData tfData, Quaternion unityRotation)
+    {
+        if (!logRotationConversion || target == null)
+        {
+            return;
+        }
+
+        float interval = rotationLogIntervalSeconds > 0f ? rotationLogIntervalSeconds : 0f;
+        int targetId = target.GetInstanceID();
+
+        if (interval > 0f &&
+            nextRotationLogByTarget.TryGetValue(targetId, out float nextLogTime) &&
+            Time.unscaledTime < nextLogTime)
+        {
+            return;
+        }
+
+        nextRotationLogByTarget[targetId] = Time.unscaledTime + interval;
+
+        Quaternion rosRotation = tfData.Rotation == default ? Quaternion.identity : Quaternion.Normalize(tfData.Rotation);
+        Debug.Log(
+            $"[MapTfRobotFollower][Rot] target='{target.name}', frame='{tfData.ParentFrame}'->'{tfData.ChildFrame}', " +
+            $"ROS q=({rosRotation.x:F5}, {rosRotation.y:F5}, {rosRotation.z:F5}, {rosRotation.w:F5}) | " +
+            $"Unity q=({unityRotation.x:F5}, {unityRotation.y:F5}, {unityRotation.z:F5}, {unityRotation.w:F5})");
     }
 
     private static void SetTransformVisibility(Transform target, bool visible)
