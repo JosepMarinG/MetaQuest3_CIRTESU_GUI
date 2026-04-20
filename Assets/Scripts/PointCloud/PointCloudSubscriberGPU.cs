@@ -303,9 +303,7 @@ public class PointCloudSubscriberGPU : MonoBehaviour
             matProps = new MaterialPropertyBlock()
         };
 
-        pointMaterial.DisableKeyword("COLOR_RGB");
-        pointMaterial.DisableKeyword("COLOR_Z");
-        pointMaterial.DisableKeyword("COLOR_INTENSITY");
+        ApplyColorModeKeywords();
 
         baseVertexIndex = (uint)pointMesh.GetBaseVertex(0);
         renderParams.matProps.SetBuffer("_PointData", pointData);
@@ -635,11 +633,21 @@ public class PointCloudSubscriberGPU : MonoBehaviour
 
             if (pointMaterial != null)
             {
-                pointMaterial.DisableKeyword("COLOR_RGB");
-                pointMaterial.DisableKeyword("COLOR_Z");
-                pointMaterial.DisableKeyword("COLOR_INTENSITY");
+                ApplyColorModeKeywords();
             }
         }
+    }
+
+    private void ApplyColorModeKeywords()
+    {
+        if (pointMaterial == null)
+        {
+            return;
+        }
+
+        pointMaterial.DisableKeyword("COLOR_INTENSITY");
+        pointMaterial.DisableKeyword("COLOR_Z");
+        pointMaterial.EnableKeyword("COLOR_RGB");
     }
 
     private void OnDestroy()

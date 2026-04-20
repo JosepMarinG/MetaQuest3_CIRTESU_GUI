@@ -31,6 +31,10 @@ public class MapTfRobotFollower : MonoBehaviour
     [Tooltip("Axis para visualizar la TF de girona500/goal_position.")]
     public Transform goalAxis;
 
+    [Header("Visibilidad del Mapa")]
+    [Tooltip("GameObject que se ocultara cuando el mapa este desactivado y se mostrara al activarlo.")]
+    public GameObject mapVisibilityRoot;
+
     [Header("Aplicacion de Pose")]
     [Tooltip("Si esta activo, se aplica pose local (recomendado cuando todo cuelga del objeto mapa).")]
     public bool applyAsLocalPose = true;
@@ -58,6 +62,7 @@ public class MapTfRobotFollower : MonoBehaviour
     private void Start()
     {
         UpdateIcon();
+        UpdateMapVisibility();
         SetAxisVisibility(isActivated || !hideAxisWhenTfMissing);
     }
 
@@ -146,6 +151,7 @@ public class MapTfRobotFollower : MonoBehaviour
     private void ApplyActivationState()
     {
         UpdateIcon();
+        UpdateMapVisibility();
 
         if (!isActivated && hideAxisWhenTfMissing)
         {
@@ -162,6 +168,14 @@ public class MapTfRobotFollower : MonoBehaviour
         if (iconFeedback != null)
         {
             iconFeedback.UpdateIcon(isActivated);
+        }
+    }
+
+    private void UpdateMapVisibility()
+    {
+        if (mapVisibilityRoot != null && mapVisibilityRoot.activeSelf != isActivated)
+        {
+            mapVisibilityRoot.SetActive(isActivated);
         }
     }
 
