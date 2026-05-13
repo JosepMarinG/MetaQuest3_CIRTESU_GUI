@@ -9,7 +9,7 @@ public class ROSTopicSelector : MonoBehaviour
 
     private SingleCameraViewer cameraViewer;
 
-    // Variables para el teclado de Meta (según doc oficial)
+    // Variables para el teclado de Meta (segï¿½n doc oficial)
     private TouchScreenKeyboard overlayKeyboard;
     public string inputText = "";
 
@@ -26,7 +26,7 @@ public class ROSTopicSelector : MonoBehaviour
 
     void Update()
     {
-        // Si el teclado está abierto, actualizamos el texto del InputField en tiempo real
+        // Si el teclado estï¿½ abierto, actualizamos el texto del InputField en tiempo real
         if (overlayKeyboard != null)
         {
             inputText = overlayKeyboard.text;
@@ -50,6 +50,7 @@ public class ROSTopicSelector : MonoBehaviour
 
     public void ClosePanel()
     {
+        cameraViewer.OnDestroy(); // Aseguramos limpiar recursos del viewer
         if (rootPanel != null) Destroy(rootPanel);
         else Destroy(transform.root.gameObject);
     }
