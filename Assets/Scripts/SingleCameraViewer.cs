@@ -68,6 +68,11 @@ public class SingleCameraViewer : MonoBehaviour
 
     private void SubscribeToTopic()
     {
+        QualityOfServiceProfile qos = new QualityOfServiceProfile();
+        qos.SetReliability(ReliabilityPolicy.QOS_POLICY_RELIABILITY_BEST_EFFORT);
+        qos.SetDurability(DurabilityPolicy.QOS_POLICY_DURABILITY_VOLATILE);
+        qos.SetHistory(HistoryPolicy.QOS_POLICY_HISTORY_KEEP_LAST, 1);
+
         subImage = ros2Node.CreateSubscription<CompressedImage>(
             cameraTopic, msg => {
                 framesReceived++;
@@ -87,7 +92,8 @@ public class SingleCameraViewer : MonoBehaviour
                     gcCounter = 0;
                     Debug.Log($"[Camera] GC llamado. Frames: Recibidos={framesReceived}, Mostrados={framesDisplayed}");
                 }
-            });
+            },
+            qos);
     }
 
     public void ChangeTopic(string newTopic)
@@ -103,7 +109,7 @@ public class SingleCameraViewer : MonoBehaviour
     }
 
     // El cierre de la suscripción se hace automáticamente aquí al destruir el panel
-    private void OnDestroy()
+    public void OnDestroy()
     {
         // 1. Primero desuscribir para evitar nuevos mensajes
         if (subImage != null && ros2Node != null)

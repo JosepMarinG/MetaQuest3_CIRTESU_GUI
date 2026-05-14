@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 using ROS2;
 using geometry_msgs.msg;
 using TMPro;
+using Oculus.Interaction.Locomotion;
 
 namespace ROS2
 {
@@ -38,6 +39,7 @@ namespace ROS2
         {
             ros2Unity = GetComponent<ROS2UnityComponent>();
             publishInterval = 1f / publishRate; // Calcular intervalo desde la frecuencia
+            UpdateLocomotionComfortState();
             if (iconFeedback != null)
             {
                 iconFeedback.UpdateIcon(isActivated);
@@ -102,6 +104,7 @@ namespace ROS2
         public void SetActivation()
         {
             isActivated = !isActivated;
+            UpdateLocomotionComfortState();
             if (iconFeedback != null)
             {
                 iconFeedback.UpdateIcon(isActivated);
@@ -114,6 +117,36 @@ namespace ROS2
                 geometry_msgs.msg.Twist stopMsg = new geometry_msgs.msg.Twist();
                 cmd_vel_publisher.Publish(stopMsg);
                 Debug.Log("[Teleop] Control desactivado. Enviando comando de parada.");
+            }
+        }
+
+        private void UpdateLocomotionComfortState()
+        {
+            bool enableComfortEffects = !isActivated;
+
+            foreach (LocomotionTunneling tunneling in FindObjectsOfType<LocomotionTunneling>(true))
+            {
+                tunneling.enabled = enableComfortEffects;
+            }
+
+            foreach (WallPenetrationTunneling tunneling in FindObjectsOfType<WallPenetrationTunneling>(true))
+            {
+                tunneling.enabled = enableComfortEffects;
+            }
+
+            foreach (LocomotionAxisTurnerInteractor turner in FindObjectsOfType<LocomotionAxisTurnerInteractor>(true))
+            {
+                turner.enabled = enableComfortEffects;
+            }
+
+            foreach (LocomotionTurnerInteractor turner in FindObjectsOfType<LocomotionTurnerInteractor>(true))
+            {
+                turner.enabled = enableComfortEffects;
+            }
+
+            foreach (TurnLocomotionBroadcaster turnBroadcaster in FindObjectsOfType<TurnLocomotionBroadcaster>(true))
+            {
+                turnBroadcaster.enabled = enableComfortEffects;
             }
         }
 
