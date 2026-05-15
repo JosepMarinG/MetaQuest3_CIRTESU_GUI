@@ -71,6 +71,8 @@ public class PointCloudSubscriberGPU : MonoBehaviour
     private uint baseVertexIndex;
 
     public int CurrentPointCount => currentPointCount;
+    public bool VisualizationEnabled => visualizationEnabled;
+    public bool IsVisualizationActive => visualizationEnabled && isActiveAndEnabled && gameObject.activeInHierarchy;
 
     private void Start()
     {

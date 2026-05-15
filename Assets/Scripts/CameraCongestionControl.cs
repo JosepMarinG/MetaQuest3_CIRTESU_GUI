@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using ROS2;
 using std_msgs.msg;
 using UnityEngine;
+using UnityEngine.XR;
 
 public class CameraCongestionControl : MonoBehaviour
 {
@@ -28,10 +30,41 @@ public class CameraCongestionControl : MonoBehaviour
         [NonSerialized] public bool testScaleApplied;
     }
 
+    [Serializable]
+    public class PointCloudControlTarget
+    {
+        [Tooltip("Transform del mapa o anchor donde se visualiza este pointcloud.")]
+        public Transform mapTransform;
+
+        [Tooltip("Subscriber GPU asociado. Si esta apagado, se publica [0, 0].")]
+        public PointCloudSubscriberGPU pointCloudSubscriber;
+
+        [Tooltip("Topic ROS2 de control: Int32MultiArray [fps, quality].")]
+        public string controlTopic = "/points/control";
+
+        [Tooltip("FPS pedidos cuando este pointcloud es prioritario.")]
+        [Min(1)]
+        public int activeFps = 5;
+
+        [Tooltip("Calidad/resolucion pedida cuando este pointcloud es prioritario.")]
+        [Range(1, 100)]
+        public int activeQuality = 80;
+
+        [NonSerialized] public IPublisher<Int32MultiArray> publisher;
+        [NonSerialized] public int lastPublishedFps = int.MinValue;
+        [NonSerialized] public int lastPublishedQuality = int.MinValue;
+    }
+
     [Header("ROS2")]
     [SerializeField] private string nodeName = "camera_congestion_control";
 
     [Header("Mirada / FOV")]
+    [Tooltip("Si esta activo, intenta usar eye tracking por Unity XR. Si falla, usa la cabeza.")]
+    [SerializeField] private bool useEyeTracking = false;
+
+    [Tooltip("Origen XR para convertir datos locales de eye tracking a mundo. Normalmente el XR Origin/OVRCameraRig. Puede quedar vacio si coincide con mundo.")]
+    [SerializeField] private Transform eyeTrackingReferenceSpace;
+
     [Tooltip("Transform que representa la mirada. Si esta vacio se usa la camara.")]
     [SerializeField] private Transform gazeOrigin;
 
@@ -69,13 +102,22 @@ public class CameraCongestionControl : MonoBehaviour
         new CameraControlTarget { controlTopic = "/camera_5/control" }
     };
 
+    [Header("Pointclouds")]
+    public PointCloudControlTarget[] pointClouds =
+    {
+        new PointCloudControlTarget { controlTopic = "/points/control" }
+    };
+
     private ROS2UnityComponent ros2Unity;
     private ROS2Node ros2Node;
     private bool ros2Initialized;
     private float publishTimer;
     private int lastSelectedIndex = -2;
+    private int lastSelectedPointCloudIndex = -2;
     private bool warnedMissingTargets;
+    private bool warnedMissingPointCloudTargets;
     private bool lastTestScaleSelectedPanel;
+    private readonly List<InputDevice> eyeTrackingDevices = new List<InputDevice>();
 
     private void Start()
     {
@@ -94,6 +136,7 @@ public class CameraCongestionControl : MonoBehaviour
     private void Update()
     {
         int selectedIndex = FindBestVisibleCameraIndex();
+        int selectedPointCloudIndex = FindBestVisiblePointCloudIndex();
 
         if (testScaleSelectedPanel || lastTestScaleSelectedPanel || lastSelectedIndex != selectedIndex)
         {
@@ -105,6 +148,7 @@ public class CameraCongestionControl : MonoBehaviour
         {
             TryInitializeROS2();
             lastSelectedIndex = selectedIndex;
+            lastSelectedPointCloudIndex = selectedPointCloudIndex;
             return;
         }
 
@@ -114,8 +158,15 @@ public class CameraCongestionControl : MonoBehaviour
         if (publishTimer >= publishInterval || selectedIndex != lastSelectedIndex)
         {
             PublishControlState(selectedIndex);
+            PublishPointCloudControlState(selectedPointCloudIndex);
             publishTimer = 0f;
             lastSelectedIndex = selectedIndex;
+            lastSelectedPointCloudIndex = selectedPointCloudIndex;
+        }
+        else if (selectedPointCloudIndex != lastSelectedPointCloudIndex)
+        {
+            PublishPointCloudControlState(selectedPointCloudIndex);
+            lastSelectedPointCloudIndex = selectedPointCloudIndex;
         }
     }
 
@@ -143,13 +194,24 @@ public class CameraCongestionControl : MonoBehaviour
             cameras[i].publisher = ros2Node.CreatePublisher<Int32MultiArray>(cameras[i].controlTopic);
         }
 
+        for (int i = 0; i < pointClouds.Length; i++)
+        {
+            if (pointClouds[i] == null || string.IsNullOrWhiteSpace(pointClouds[i].controlTopic))
+            {
+                continue;
+            }
+
+            pointClouds[i].publisher = ros2Node.CreatePublisher<Int32MultiArray>(pointClouds[i].controlTopic);
+        }
+
         ros2Initialized = true;
         PublishControlState(FindBestVisibleCameraIndex(), force: true);
+        PublishPointCloudControlState(FindBestVisiblePointCloudIndex(), force: true);
         UpdateTestPanelScale(FindBestVisibleCameraIndex());
 
         if (verboseDebugLogs)
         {
-            Debug.Log($"[CameraCongestionControl] Initialized with {cameras.Length} camera control topics.");
+            Debug.Log($"[CameraCongestionControl] Initialized with {cameras.Length} camera control topics and {pointClouds.Length} pointcloud control topics.");
         }
     }
 
@@ -160,7 +222,7 @@ public class CameraCongestionControl : MonoBehaviour
 
         for (int i = 0; i < cameras.Length; i++)
         {
-            if (TryGetVisualScore(cameras[i], out float score) && score > bestScore)
+            if (cameras[i] != null && TryGetVisualScore(cameras[i].panelTransform, out float score) && score > bestScore)
             {
                 bestScore = score;
                 bestIndex = i;
@@ -181,28 +243,61 @@ public class CameraCongestionControl : MonoBehaviour
         return bestIndex;
     }
 
-    private bool TryGetVisualScore(CameraControlTarget target, out float score)
+    private int FindBestVisiblePointCloudIndex()
+    {
+        int bestIndex = -1;
+        float bestScore = float.NegativeInfinity;
+
+        for (int i = 0; i < pointClouds.Length; i++)
+        {
+            PointCloudControlTarget target = pointClouds[i];
+            if (target == null || !IsPointCloudVisualizationActive(target))
+            {
+                continue;
+            }
+
+            if (TryGetVisualScore(target.mapTransform, out float score) && score > bestScore)
+            {
+                bestScore = score;
+                bestIndex = i;
+            }
+        }
+
+        if (bestIndex < 0 && pointClouds.Length > 0 && !warnedMissingPointCloudTargets)
+        {
+            warnedMissingPointCloudTargets = true;
+            Debug.LogWarning("[CameraCongestionControl] No visible active pointcloud target found. Assign map transforms and enabled PointCloudSubscriberGPU references.");
+        }
+
+        if (bestIndex >= 0)
+        {
+            warnedMissingPointCloudTargets = false;
+        }
+
+        return bestIndex;
+    }
+
+    private bool TryGetVisualScore(Transform targetTransform, out float score)
     {
         score = 0f;
 
-        if (target == null || target.panelTransform == null)
+        if (targetTransform == null)
         {
             return false;
         }
 
-        Transform origin = GetGazeOrigin();
-        if (origin == null)
+        if (!TryGetGazeRay(out Vector3 gazePosition, out Vector3 gazeForward))
         {
             return false;
         }
 
-        Vector3 toPanel = target.panelTransform.position - origin.position;
+        Vector3 toPanel = targetTransform.position - gazePosition;
         if (toPanel.sqrMagnitude < 0.0001f)
         {
             return false;
         }
 
-        float angle = Vector3.Angle(origin.forward, toPanel);
+        float angle = Vector3.Angle(gazeForward, toPanel);
         if (angle > maxAngleFromGazeDegrees)
         {
             return false;
@@ -210,7 +305,7 @@ public class CameraCongestionControl : MonoBehaviour
 
         if (requireViewportVisibility && headCamera != null)
         {
-            Vector3 viewportPoint = headCamera.WorldToViewportPoint(target.panelTransform.position);
+            Vector3 viewportPoint = headCamera.WorldToViewportPoint(targetTransform.position);
             bool isInViewport =
                 viewportPoint.z > 0f &&
                 viewportPoint.x >= -viewportMargin &&
@@ -231,7 +326,114 @@ public class CameraCongestionControl : MonoBehaviour
         return true;
     }
 
-    private Transform GetGazeOrigin()
+    private bool TryGetGazeRay(out Vector3 position, out Vector3 forward)
+    {
+        if (useEyeTracking && TryGetEyeTrackingRay(out position, out forward))
+        {
+            return true;
+        }
+
+        Transform origin = GetHeadGazeOrigin();
+        if (origin == null)
+        {
+            position = Vector3.zero;
+            forward = Vector3.forward;
+            return false;
+        }
+
+        position = origin.position;
+        forward = origin.forward;
+        return true;
+    }
+
+    private bool TryGetEyeTrackingRay(out Vector3 position, out Vector3 forward)
+    {
+        Transform headOrigin = GetHeadGazeOrigin();
+        position = headOrigin != null ? headOrigin.position : Vector3.zero;
+        forward = Vector3.forward;
+
+        eyeTrackingDevices.Clear();
+        InputDevices.GetDevicesAtXRNode(XRNode.CenterEye, eyeTrackingDevices);
+        if (eyeTrackingDevices.Count == 0)
+        {
+            InputDevices.GetDevicesAtXRNode(XRNode.Head, eyeTrackingDevices);
+        }
+        if (eyeTrackingDevices.Count == 0)
+        {
+            InputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.EyeTracking, eyeTrackingDevices);
+        }
+
+        for (int i = 0; i < eyeTrackingDevices.Count; i++)
+        {
+            InputDevice device = eyeTrackingDevices[i];
+            if (!device.isValid || !device.TryGetFeatureValue(CommonUsages.eyesData, out Eyes eyes))
+            {
+                continue;
+            }
+
+            if (eyes.TryGetFixationPoint(out Vector3 fixationPoint))
+            {
+                Vector3 worldFixationPoint = ToWorldPointFromEyeTracking(fixationPoint);
+                Vector3 direction = worldFixationPoint - position;
+                if (direction.sqrMagnitude > 0.0001f)
+                {
+                    forward = direction.normalized;
+                    return true;
+                }
+            }
+
+            if (TryGetEyeForwardFromRotations(eyes, out forward))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryGetEyeForwardFromRotations(Eyes eyes, out Vector3 forward)
+    {
+        bool hasLeftRotation = eyes.TryGetLeftEyeRotation(out Quaternion leftRotation);
+        bool hasRightRotation = eyes.TryGetRightEyeRotation(out Quaternion rightRotation);
+
+        if (hasLeftRotation && hasRightRotation)
+        {
+            Quaternion averageRotation = Quaternion.Slerp(leftRotation, rightRotation, 0.5f);
+            forward = ToWorldDirectionFromEyeTracking(averageRotation * Vector3.forward);
+            return forward.sqrMagnitude > 0.0001f;
+        }
+
+        if (hasLeftRotation)
+        {
+            forward = ToWorldDirectionFromEyeTracking(leftRotation * Vector3.forward);
+            return forward.sqrMagnitude > 0.0001f;
+        }
+
+        if (hasRightRotation)
+        {
+            forward = ToWorldDirectionFromEyeTracking(rightRotation * Vector3.forward);
+            return forward.sqrMagnitude > 0.0001f;
+        }
+
+        forward = Vector3.forward;
+        return false;
+    }
+
+    private Vector3 ToWorldPointFromEyeTracking(Vector3 point)
+    {
+        return eyeTrackingReferenceSpace != null
+            ? eyeTrackingReferenceSpace.TransformPoint(point)
+            : point;
+    }
+
+    private Vector3 ToWorldDirectionFromEyeTracking(Vector3 direction)
+    {
+        return eyeTrackingReferenceSpace != null
+            ? eyeTrackingReferenceSpace.TransformDirection(direction).normalized
+            : direction.normalized;
+    }
+
+    private Transform GetHeadGazeOrigin()
     {
         if (gazeOrigin != null)
         {
@@ -289,6 +491,45 @@ public class CameraCongestionControl : MonoBehaviour
         }
     }
 
+    private void PublishPointCloudControlState(int selectedIndex, bool force = false)
+    {
+        for (int i = 0; i < pointClouds.Length; i++)
+        {
+            PointCloudControlTarget target = pointClouds[i];
+            if (target == null || target.publisher == null)
+            {
+                continue;
+            }
+
+            bool shouldPublishPointCloud = i == selectedIndex && IsPointCloudVisualizationActive(target);
+            int fps = shouldPublishPointCloud ? Mathf.Max(1, target.activeFps) : 0;
+            int quality = shouldPublishPointCloud ? Mathf.Clamp(target.activeQuality, 1, 100) : 0;
+
+            if (!force && fps == target.lastPublishedFps && quality == target.lastPublishedQuality)
+            {
+                continue;
+            }
+
+            Int32MultiArray msg = new Int32MultiArray();
+            msg.Data = new[] { fps, quality };
+            target.publisher.Publish(msg);
+
+            target.lastPublishedFps = fps;
+            target.lastPublishedQuality = quality;
+        }
+
+        if (verboseDebugLogs)
+        {
+            string selected = selectedIndex >= 0 ? (selectedIndex + 1).ToString() : "none";
+            Debug.Log($"[CameraCongestionControl] Active pointcloud: {selected}");
+        }
+    }
+
+    private bool IsPointCloudVisualizationActive(PointCloudControlTarget target)
+    {
+        return target.pointCloudSubscriber != null && target.pointCloudSubscriber.IsVisualizationActive;
+    }
+
     private void UpdateTestPanelScale(int selectedIndex)
     {
         float multiplier = Mathf.Max(1f, selectedPanelScaleMultiplier);
@@ -330,6 +571,15 @@ public class CameraCongestionControl : MonoBehaviour
             {
                 ros2Node.RemovePublisher<Int32MultiArray>(cameras[i].publisher);
                 cameras[i].publisher = null;
+            }
+        }
+
+        for (int i = 0; i < pointClouds.Length; i++)
+        {
+            if (pointClouds[i]?.publisher != null)
+            {
+                ros2Node.RemovePublisher<Int32MultiArray>(pointClouds[i].publisher);
+                pointClouds[i].publisher = null;
             }
         }
 
