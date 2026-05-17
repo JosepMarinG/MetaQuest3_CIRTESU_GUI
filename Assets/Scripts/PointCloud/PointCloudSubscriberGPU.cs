@@ -259,7 +259,12 @@ public class PointCloudSubscriberGPU : MonoBehaviour
                 return;
             }
 
-            pointCloudSubscription = ros2Node.CreateSubscription<PointCloud2>(topicName, OnPointCloudReceived);
+            var qos = new QualityOfServiceProfile();
+            qos.SetReliability(ReliabilityPolicy.QOS_POLICY_RELIABILITY_BEST_EFFORT);
+            qos.SetDurability(DurabilityPolicy.QOS_POLICY_DURABILITY_VOLATILE);
+            qos.SetHistory(HistoryPolicy.QOS_POLICY_HISTORY_KEEP_LAST, 1);
+
+            pointCloudSubscription = ros2Node.CreateSubscription<PointCloud2>(topicName, OnPointCloudReceived, qos);
             if (pointCloudSubscription == null)
             {
                 Debug.LogError($"[PointCloudSubscriberGPU] No se pudo crear la suscripcion a '{topicName}'.");
