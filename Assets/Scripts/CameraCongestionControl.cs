@@ -84,6 +84,9 @@ public class CameraCongestionControl : MonoBehaviour
     [Tooltip("Si no hay ningun panel visible, todas las camaras se apagan.")]
     [SerializeField] private bool turnOffWhenNoPanelVisible = true;
 
+    [Tooltip("Controlador del modo inmersivo. Si esta activo, el pointcloud prioritario se selecciona sin comprobar la mirada.")]
+    [SerializeField] private ImmersiveModeController immersiveModeController;
+
     [SerializeField] private bool verboseDebugLogs = true;
 
     [Header("Test Visual")]
@@ -245,6 +248,19 @@ public class CameraCongestionControl : MonoBehaviour
 
     private int FindBestVisiblePointCloudIndex()
     {
+        if (IsImmersiveModeActive())
+        {
+            for (int i = 0; i < pointClouds.Length; i++)
+            {
+                PointCloudControlTarget target = pointClouds[i];
+                if (target != null && IsPointCloudVisualizationActive(target))
+                {
+                    warnedMissingPointCloudTargets = false;
+                    return i;
+                }
+            }
+        }
+
         int bestIndex = -1;
         float bestScore = float.NegativeInfinity;
 
@@ -528,6 +544,11 @@ public class CameraCongestionControl : MonoBehaviour
     private bool IsPointCloudVisualizationActive(PointCloudControlTarget target)
     {
         return target.pointCloudSubscriber != null && target.pointCloudSubscriber.IsVisualizationActive;
+    }
+
+    private bool IsImmersiveModeActive()
+    {
+        return immersiveModeController != null && immersiveModeController.isActivated;
     }
 
     private void UpdateTestPanelScale(int selectedIndex)

@@ -20,6 +20,10 @@ public class ImmersiveModeController : MonoBehaviour
     [Header("UI Feedback")]
     public ToggleIconFeedback iconFeedback;
 
+    [Header("Passthrough / VR")]
+    [Tooltip("Arrastra aqui el OVRPassthroughLayer desde tu OVRCameraRig.")]
+    [SerializeField] private OVRPassthroughLayer passthroughLayer;
+
     [Header("Mapa inmersivo")]
     [Tooltip("Padre del mapa inmersivo. En tu escena deberia ser InmersiveMap.")]
     public GameObject immersiveMapRoot;
@@ -34,6 +38,9 @@ public class ImmersiveModeController : MonoBehaviour
     private readonly Dictionary<Transform, SavedPose> savedTargetPoses = new Dictionary<Transform, SavedPose>();
     private bool savedImmersiveMapActive;
     private bool hasSavedImmersiveMapState;
+    private CameraClearFlags savedCameraClearFlags;
+    private Color savedCameraBackgroundColor;
+    private bool hasSavedCameraState;
 
     private struct SavedPose
     {
@@ -98,6 +105,7 @@ public class ImmersiveModeController : MonoBehaviour
     private void EnterImmersiveMode()
     {
         SaveCurrentState();
+        SetPassthrough(false);
         ApplyImmersiveTargets();
 
         if (immersiveMapRoot != null)
@@ -108,6 +116,8 @@ public class ImmersiveModeController : MonoBehaviour
 
     private void ExitImmersiveMode()
     {
+        SetPassthrough(true);
+
         foreach (KeyValuePair<Transform, SavedPose> pair in savedTargetPoses)
         {
             if (pair.Key != null)
@@ -143,6 +153,51 @@ public class ImmersiveModeController : MonoBehaviour
         {
             savedImmersiveMapActive = immersiveMapRoot.activeSelf;
             hasSavedImmersiveMapState = true;
+        }
+
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
+        {
+            savedCameraClearFlags = mainCamera.clearFlags;
+            savedCameraBackgroundColor = mainCamera.backgroundColor;
+            hasSavedCameraState = true;
+        }
+    }
+
+    /// <summary>
+    /// Cambia entre Passthrough (MR) y Realidad Virtual pura (VR).
+    /// </summary>
+    /// <param name="turnOn">True para activar Passthrough, False para volver a VR.</param>
+    public void SetPassthrough(bool turnOn)
+    {
+        if (passthroughLayer != null)
+        {
+            passthroughLayer.enabled = turnOn;
+        }
+        else
+        {
+            Debug.LogWarning("[ImmersiveModeController] No se ha asignado la capa de Passthrough.");
+        }
+
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+        {
+            return;
+        }
+
+        if (turnOn)
+        {
+            mainCamera.clearFlags = CameraClearFlags.SolidColor;
+            mainCamera.backgroundColor = new Color(0f, 0f, 0f, 0f);
+        }
+        else
+        {
+            mainCamera.clearFlags = CameraClearFlags.Skybox;
+
+            if (hasSavedCameraState && savedCameraClearFlags == CameraClearFlags.Skybox)
+            {
+                mainCamera.backgroundColor = savedCameraBackgroundColor;
+            }
         }
     }
 

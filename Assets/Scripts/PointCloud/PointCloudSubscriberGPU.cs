@@ -36,6 +36,11 @@ public class PointCloudSubscriberGPU : MonoBehaviour
     [Header("UI Feedback")]
     [SerializeField] private ToggleIconFeedback iconFeedback;
 
+    [Header("Modo inmersivo")]
+    [SerializeField] private ImmersiveModeController immersiveModeController;
+    [SerializeField] private Transform anchorTransformImmersive;
+    [SerializeField, Min(0.001f)] private float pointSizeImmersive = 0.2f;
+
     private const int BytesPerPoint = 16; // x,y,z,intensity(or rgb packed)
 
     private ROS2UnityComponent ros2Unity;
@@ -139,7 +144,7 @@ public class PointCloudSubscriberGPU : MonoBehaviour
             return;
         }
 
-        Transform anchor = anchorTransform != null ? anchorTransform : transform;
+        Transform anchor = GetActiveAnchorTransform();
         Matrix4x4 anchorMatrix = anchor.localToWorldMatrix;
         Matrix4x4 localOffsetMatrix = Matrix4x4.TRS(localPositionOffset, Quaternion.Euler(localEulerOffset), Vector3.one);
         Matrix4x4 cloudScaleMatrix = Matrix4x4.Scale(new Vector3(cloudScale, cloudScale, cloudScale));
@@ -153,6 +158,9 @@ public class PointCloudSubscriberGPU : MonoBehaviour
             transformationMatrix = anchorMatrix * localOffsetMatrix * rotationMatrix * inversionMatrix * cloudScaleMatrix * centerTranslation;
         }
 
+        // select point size based on immersive mode
+        float activePointSize = (immersiveModeController != null && immersiveModeController.isActivated) ? pointSizeImmersive : pointSize;
+        renderParams.matProps.SetFloat("_PointSize", activePointSize);
         renderParams.matProps.SetMatrix("_ObjectToWorld", transformationMatrix);
 
         Graphics.RenderPrimitivesIndexed(
@@ -166,7 +174,7 @@ public class PointCloudSubscriberGPU : MonoBehaviour
         if (!loggedRenderState && enableBasicLogs)
         {
             loggedRenderState = true;
-            Debug.Log($"[PointCloudSubscriberGPU] Render activo. points={currentPointCount}, pointSize={pointSize}, cloudScale={cloudScale}, centerCloudOnBounds={centerCloudOnBounds}, displayAllPoints={displayAllPoints}, anchor={(anchorTransform != null ? anchorTransform.name : transform.name)}, position={anchor.position}, material={(pointMaterial != null ? pointMaterial.name : "null")}, shader={(pointMaterial != null && pointMaterial.shader != null ? pointMaterial.shader.name : "null")}");
+            Debug.Log($"[PointCloudSubscriberGPU] Render activo. points={currentPointCount}, pointSize={(immersiveModeController != null && immersiveModeController.isActivated ? pointSizeImmersive : pointSize)}, cloudScale={cloudScale}, centerCloudOnBounds={centerCloudOnBounds}, displayAllPoints={displayAllPoints}, anchor={(anchorTransform != null ? anchorTransform.name : transform.name)}, position={anchor.position}, material={(pointMaterial != null ? pointMaterial.name : "null")}, shader={(pointMaterial != null && pointMaterial.shader != null ? pointMaterial.shader.name : "null")}");
         }
     }
 
@@ -608,6 +616,23 @@ public class PointCloudSubscriberGPU : MonoBehaviour
         }
     }
 
+    private Transform GetActiveAnchorTransform()
+    {
+        bool immersiveModeActive = immersiveModeController != null && immersiveModeController.isActivated;
+
+        if (immersiveModeActive && anchorTransformImmersive != null)
+        {
+            return anchorTransformImmersive;
+        }
+
+        if (anchorTransform != null)
+        {
+            return anchorTransform;
+        }
+
+        return transform;
+    }
+
     private void OnValidate()
     {
         if (displayPointLimit < 1)
@@ -630,9 +655,16 @@ public class PointCloudSubscriberGPU : MonoBehaviour
             anchorTransform = transform;
         }
 
+        if (anchorTransformImmersive == null)
+        {
+            anchorTransformImmersive = anchorTransform;
+        }
+
         if (renderParams.matProps != null)
         {
-            renderParams.matProps.SetFloat("_PointSize", pointSize);
+            // ensure material property block has correct point size (use immersive fallback if active)
+            float activePointSize = (immersiveModeController != null && immersiveModeController.isActivated) ? pointSizeImmersive : pointSize;
+            renderParams.matProps.SetFloat("_PointSize", activePointSize);
             Color renderColorMin = forceSolidWhiteColor ? Color.white : intensityMin;
             Color renderColorMax = forceSolidWhiteColor ? Color.white : intensityMax;
             renderParams.matProps.SetColor("_ColorMin", renderColorMin);
